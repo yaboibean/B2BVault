@@ -23,6 +23,11 @@ python3 -m http.server 8000
 # http://localhost:8000
 
 #save changes and push to github
+
+
+git add scraped_data/website/index.html references.txt
+git commit -m "Update site content"
+git push origin main
 git add netlify_site/
 git commit -m "Update homepage content"
 git push origin main
