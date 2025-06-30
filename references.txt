@@ -24,10 +24,13 @@ python3 -m http.server 8000
 
 #save changes and push to github
 
+cp scraped_data/website/index.html netlify_site/index.html
 
-git add scraped_data/website/index.html references.txt
-git commit -m "Update site content"
-git push origin main
-git add netlify_site/
-git commit -m "Update homepage content"
+# 2. Stage all changes (you can narrow this if needed)
+git add netlify_site/index.html scraped_data/website/index.html references.txt
+
+# 3. Commit with a descriptive message
+git commit -m "Update index.html and data"
+
+# 4. Push to GitHub (Netlify will auto-redeploy)
 git push origin main
