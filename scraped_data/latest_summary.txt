@@ -1,0 +1,29 @@
+TL;DR: The 2025 B2B Buyer First Report finds that B2B SaaS companies have made only marginal progress in adopting buyer-first practices like transparent pricing, interactive demos, and instant scheduling. Buyers continue to express a strong preference for easy access to product information, direct scheduling, and pricing transparency, but companies remain hesitant to fully implement these features due to a lack of clear data on ROI.
+
+The report evaluates the websites and sales processes of the 100 top B2B SaaS companies, revealing that the adoption of buyer-first practices has stagnated, with only slight year-over-year improvements. Specifically, just 9 percent of companies offer calendar schedulers for instant meetings, 33 percent provide interactive demos, and 72 percent display a pricing page. The analysis draws on website reviews, demo bookings, and in-depth interviews with senior SaaS buyers, highlighting a disconnect between what buyers want and what companies deliver. Buyers consistently indicate they value the ability to see and interact with a product independently, schedule meetings instantly, and access transparent pricing. However, many companies are still reluctant to implement these practices, often citing a lack of hard data to justify the changes. The report also identifies key metrics for measuring the impact of buyer-first practices, such as website conversion rate, product engagement rate, demos scheduled from qualified leads, demo attendance rate, and the conversion rate from sales-qualified leads to opportunities. Real-world buyer feedback emphasizes the importance of reducing friction in the buying process, including removing unnecessary forms, providing clear product tours, and making pricing visible upfront.
+
+Key takeaways and insights:
+- Progress on buyer-first practices is slow, with only minor increases in the use of instant scheduling, interactive demos, and transparent pricing compared to last year.
+- Buyers overwhelmingly prefer ungated, self-serve experiences such as interactive demos, product walkthroughs, and clear pricing information.
+- Companies are hesitant to fully embrace these practices due to a perceived lack of data demonstrating clear ROI.
+- Metrics like website conversion rate and product engagement rate are essential for justifying and tracking the effectiveness of buyer-first initiatives.
+- Buyer frustration increases with gated demos, vague pricing, manual scheduling, and company-centric communication.
+
+Notable companies or technologies mentioned:
+- Ramp: Recognized for its intuitive interactive demo and product tour.
+- Riverside: Praised for its transparent free trial model and exposing product features without gatekeeping.
+- Clay: Highlighted for its self-serve sales process and product education during the sales cycle.
+- PostHog: Noted for transparent, usage-based pricing and product-led growth without a traditional outbound sales team.
+- Pendo: Mentioned for clear package differentiation and transparent pricing.
+- Navattic: Cited as a tool for creating interactive demos.
+- Chili Piper: Featured for instant scheduling and demo booking solutions.
+- Limelight, HubSpot, G2, CaliberMind, and Zafin: Referenced in buyer anecdotes.
+
+Actionable recommendations for B2B sales professionals:
+- Prioritize implementing instant scheduling tools so buyers can book meetings without waiting for manual follow-ups.
+- Provide interactive, ungated demos and product tours that allow buyers to explore the product without filling out a form or talking to sales.
+- Make pricing as transparent as possible, even if only as ranges, to help buyers qualify themselves early and avoid wasted time.
+- Track and optimize key buyer-first metrics such as website conversion rate, product engagement rate, demo scheduling from qualified leads, and demo attendance rate.
+- Ensure follow-up processes are clear, personalized, and easy to navigate, minimizing back-and-forth and company-centric messaging.
+- Encourage unstructured, conversational discovery calls rather than rigid scripts to create a more positive buyer experience.
+- Use buyer feedback and real-world examples to build a business case for adopting buyer-first practices, focusing on how these changes improve conversion and sales cycle efficiency.

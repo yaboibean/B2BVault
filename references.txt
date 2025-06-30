@@ -1,0 +1,23 @@
+# Run the B2B scraper with preview
+python3 B2Bscraper.py
+
+# Debug commands if needed:
+# python3 -c "from B2Bscraper import B2BVaultAgent; agent = B2BVaultAgent(); articles = agent.navigate_to_sales_tab_and_get_articles(preview=True); print(f'Found {len(articles)} articles')"
+
+# Check scraped data folder:
+# ls -la scraped_data/
+
+# OPEN THE WEBSITE DASHBOARD:
+# Start the website server (easiest method):
+python3 start_website.py
+
+# Alternative - Start from website directory:
+cd scraped_data/website
+python3 start_server.py
+
+# Alternative - Quick Python server:
+cd scraped_data/website
+python3 -m http.server 8000
+
+# Then open in browser:
+# http://localhost:8000
