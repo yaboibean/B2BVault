@@ -1,255 +1,201 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Vault Analysis Dashboard</title>
-    <style>
-        :root {
-            --primary-bg: #22283a;
-            --secondary-bg: #27304a;
-            --card-bg: #2e354d;
-            --accent: #4e7ac7;
-            --accent-light: #7bb1ff;
-            --accent-dark: #2b4a7a;
-            --text-main: #e9ecef;
-            --text-secondary: #bfcbe2;
-            --border: #3a4660;
-            --badge-bg: #2b4a7a;
-            --badge-text: #f8f9fa;
-            --btn-bg: #4e7ac7;
-            --btn-hover: #365a8c;
-            --input-bg: #232a3a;
-            --input-border: #3a4660;
-            --shadow: 0 8px 25px rgba(0,0,0,0.12);
-        }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--primary-bg);
-            color: var(--text-main);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-
-        .header {
-            text-align: center;
-            color: var(--text-main);
-            margin-bottom: 40px;
-            padding: 48px 20px 32px 20px;
-            background: var(--secondary-bg);
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-        }
-
-        .header h1 {
-            font-size: 2.7rem;
-            margin-bottom: 12px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: var(--accent-light);
-            text-shadow: 0 2px 8px #1d2233a0;
-        }
-
-        .header p {
-            font-size: 1.15rem;
-            color: var(--text-secondary);
-            opacity: 0.85;
-        }
-
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 32px;
-            margin: 32px 0 24px 0;
-            flex-wrap: wrap;
-        }
-
-        .stat-card {
-            background: var(--card-bg);
-            padding: 22px 32px;
-            border-radius: 12px;
-            text-align: center;
-            color: var(--text-main);
-            min-width: 140px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border: 1px solid var(--border);
-        }
-
-        .stat-number {
-            font-size: 2.1rem;
-            font-weight: 600;
-            color: var(--accent-light);
-            margin-bottom: 4px;
-        }
-
-        .search-box {
-            margin: 32px 0 0 0;
-            text-align: center;
-        }
-
-        .search-input {
-            padding: 13px 22px;
-            font-size: 1rem;
-            border: 1.5px solid var(--input-border);
-            border-radius: 30px;
-            width: 320px;
-            max-width: 95%;
-            background: var(--input-bg);
-            color: var(--text-main);
-            outline: none;
-            transition: border 0.2s;
-        }
-        .search-input:focus {
-            border-color: var(--accent);
-        }
-
-        .articles-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 32px;
-            margin-top: 36px;
-        }
-
-        .article-card {
-            background: var(--card-bg);
-            border-radius: 14px;
-            padding: 28px 24px 24px 24px;
-            box-shadow: var(--shadow);
-            border-left: 5px solid var(--accent);
-            transition: transform 0.2s, box-shadow 0.2s, border-left 0.2s;
-            border-bottom: 1.5px solid var(--border);
-        }
-
-        .article-card:hover {
-            transform: translateY(-4px) scale(1.01);
-            box-shadow: 0 16px 40px rgba(0,0,0,0.16);
-            border-left: 5px solid var(--accent-light);
-        }
-
-        .article-title {
-            color: var(--accent-light);
-            margin-bottom: 13px;
-            font-size: 1.22rem;
-            font-weight: 600;
-            line-height: 1.4;
-        }
-
-        .article-meta {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .tab-badge {
-            background: var(--badge-bg);
-            color: var(--badge-text);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
-        .date, .word-count, .publisher {
-            color: var(--accent);
-            font-size: 0.92rem;
-            padding: 4px 10px;
-            background: #22305a;
-            border-radius: 14px;
-        }
-
-        .article-preview p {
-            margin-bottom: 15px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        .expand-btn, .source-link {
-            background: var(--btn-bg);
-            color: var(--badge-text);
-            border: none;
-            padding: 10px 22px;
-            border-radius: 25px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: background 0.2s;
-            font-size: 0.98rem;
-            font-weight: 500;
-            margin-top: 2px;
-        }
-
-        .expand-btn:hover, .source-link:hover {
-            background: var(--btn-hover);
-        }
-
-        .article-full {
-            margin-top: 20px;
-            padding-top: 18px;
-            border-top: 1px solid var(--border);
-        }
-
-        .summary-content {
-            margin-bottom: 18px;
-            line-height: 1.7;
-            color: var(--text-secondary);
-        }
-
-        .article-link {
-            text-align: center;
-        }
-
-        .footer {
-            text-align: center;
-            color: var(--accent-light);
-            margin-top: 60px;
-            padding: 22px;
-            opacity: 0.85;
-            background: var(--secondary-bg);
-            border-radius: 12px;
-            font-size: 1rem;
-        }
-
-        @media (max-width: 900px) {
-            .articles-grid {
-                grid-template-columns: 1fr;
-            }
-            .header h1 {
-                font-size: 2rem;
-            }
-            .stats {
-                gap: 18px;
-            }
-        }
-        @media (max-width: 600px) {
-            .container {
-                padding: 10px;
-            }
-            .header {
-                padding: 28px 8px 18px 8px;
-            }
-            .article-card {
-                padding: 18px 8px 16px 8px;
-            }
-            .search-input {
-                width: 98%;
-            }
-        }
-    </style>
-</head>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>B2B Vault Analysis Dashboard</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }
+                
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                
+                .header {
+                    text-align: center;
+                    color: white;
+                    margin-bottom: 40px;
+                    padding: 40px 20px;
+                }
+                
+                .header h1 {
+                    font-size: 3rem;
+                    margin-bottom: 10px;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                }
+                
+                .header p {
+                    font-size: 1.2rem;
+                    opacity: 0.9;
+                }
+                
+                .stats {
+                    display: flex;
+                    justify-content: center;
+                    gap: 30px;
+                    margin: 30px 0;
+                    flex-wrap: wrap;
+                }
+                
+                .stat-card {
+                    background: rgba(255,255,255,0.1);
+                    padding: 20px;
+                    border-radius: 10px;
+                    text-align: center;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                }
+                
+                .stat-number {
+                    font-size: 2rem;
+                    font-weight: bold;
+                    display: block;
+                }
+                
+                .search-box {
+                    margin: 30px 0;
+                    text-align: center;
+                }
+                
+                .search-input {
+                    padding: 12px 20px;
+                    font-size: 16px;
+                    border: none;
+                    border-radius: 25px;
+                    width: 300px;
+                    max-width: 90%;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                
+                .articles-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                    gap: 30px;
+                    margin-top: 30px;
+                }
+                
+                .article-card {
+                    background: white;
+                    border-radius: 15px;
+                    padding: 25px;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    border-left: 5px solid #667eea;
+                }
+                
+                .article-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+                }
+                
+                .article-title {
+                    color: #2c3e50;
+                    margin-bottom: 15px;
+                    font-size: 1.3rem;
+                    line-height: 1.4;
+                }
+                
+                .article-meta {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }
+                
+                .tab-badge {
+                    background: #667eea;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                }
+                
+                .date, .word-count, .publisher {
+                    color: #666;
+                    font-size: 0.9rem;
+                    padding: 4px 8px;
+                    background: #f8f9fa;
+                    border-radius: 15px;
+                }
+                
+                .article-preview p {
+                    margin-bottom: 15px;
+                    color: #555;
+                    line-height: 1.6;
+                }
+                
+                .expand-btn, .source-link {
+                    background: #667eea;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 25px;
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    transition: background 0.3s ease;
+                    font-size: 0.9rem;
+                }
+                
+                .expand-btn:hover, .source-link:hover {
+                    background: #5a6fd8;
+                }
+                
+                .article-full {
+                    margin-top: 20px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                }
+                
+                .summary-content {
+                    margin-bottom: 20px;
+                    line-height: 1.7;
+                    color: #444;
+                }
+                
+                .article-link {
+                    text-align: center;
+                }
+                
+                .footer {
+                    text-align: center;
+                    color: white;
+                    margin-top: 50px;
+                    padding: 20px;
+                    opacity: 0.8;
+                }
+                
+                @media (max-width: 768px) {
+                    .articles-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .header h1 {
+                        font-size: 2rem;
+                    }
+                    
+                    .stats {
+                        gap: 15px;
+                    }
+                }
+            </style>
+        </head>
         <body>
             <div class="container">
                 <div class="header">
