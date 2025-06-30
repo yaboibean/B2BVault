@@ -259,21 +259,20 @@ class B2BVaultAgent:
                             seen_urls.add(href)
                             
                             # Fast title/publisher extraction
-                        try:
-                            title = safe_get_title(card)
-                            publisher = safe_get_publisher(card)
-                            
-                            # Debug output
-                            if preview and len(articles) < 5:  # Show first 5 for debugging
-                                print(f"   DEBUG - Extracted title: '{title}'")
-                                print(f"   DEBUG - Extracted publisher: '{publisher}'")
-                        except Exception as e:
-                            title = f"Article {len(articles) + 1} from {tab_name}"
-                            publisher = "Unknown Publisher"
-                            if preview:
-                                print(f"   DEBUG - Title extraction failed: {e}")
+                            try:
+                                title = safe_get_title(card)
+                                publisher = safe_get_publisher(card)
+                                
+                                # Debug output
+                                if preview and len(articles) < 5:  # Show first 5 for debugging
+                                    print(f"   DEBUG - Extracted title: '{title}'")
+                                    print(f"   DEBUG - Extracted publisher: '{publisher}'")
+                            except Exception as e:
+                                title = f"Article {len(articles) + 1} from {tab_name}"
+                                publisher = "Unknown Publisher"
+                                if preview:
+                                    print(f"   DEBUG - Title extraction failed: {e}")
 
-                            
                             articles.append({
                                 "title": title,
                                 "publisher": publisher,
@@ -284,7 +283,9 @@ class B2BVaultAgent:
                             
                             if preview and len(articles) <= 10:  # Show fewer for speed
                                 print(f"   📰 Article {len(articles)}: {title[:40]}...")
-                    except:
+                    except Exception as e:
+                        if preview:
+                            print(f"   ⚠️ Error processing card {i}: {e}")
                         continue
                 
                 self.logger.info(f"Collected {len(articles)} unique {tab_name} articles")
@@ -293,6 +294,8 @@ class B2BVaultAgent:
                 
             except Exception as e:
                 self.logger.error(f"Error navigating to {tab_name} tab: {e}")
+                if preview:
+                    print(f"❌ Error navigating to {tab_name} tab: {e}")
                 raise
             finally:
                 browser.close()
@@ -560,6 +563,55 @@ class B2BVaultAgent:
         except Exception as e:
             self.logger.error(f"Error generating PDF: {e}")
             raise
+
+    def scrape_article_content(self, article_url: str, preview: bool = False) -> str:
+        """Synchronous version of article content scraping for fallback processing."""
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                
+                page.goto(article_url, timeout=20000)
+                page.wait_for_load_state("domcontentloaded")
+                
+                # Get content
+                content = page.content()
+                browser.close()
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract title
+                title_selectors = ["h1", ".article-title", ".post-title", "title"]
+                title = "Untitled"
+                for selector in title_selectors:
+                    title_elem = soup.select_one(selector)
+                    if title_elem and title_elem.get_text(strip=True):
+                        title = title_elem.get_text(strip=True)
+                        break
+                
+                # Extract article body
+                body_selectors = [
+                    "article", ".article-content", ".post-content", 
+                    ".content", "main", ".rich-text"
+                ]
+                
+                body_text = ""
+                for selector in body_selectors:
+                    body_elem = soup.select_one(selector)
+                    if body_elem:
+                        body_text = body_elem.get_text("\n", strip=True)
+                        break
+                
+                if not body_text:
+                    paragraphs = soup.find_all("p")
+                    body_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                
+                return f"Title: {title}\n\nContent:\n{body_text}"
+                
+        except Exception as e:
+            self.logger.error(f"Error scraping article {article_url}: {e}")
+            return ""
 
     def process_multiple_articles(self, articles: List[Dict], preview: bool = False) -> List[Dict]:
         """Process multiple articles and return their summaries."""
@@ -1253,14 +1305,24 @@ if __name__ == "__main__":
                     print(f"\n📋 STEP 1.{self.tabs_to_search.index(tab)+1}: Collecting {tab} Articles")
                     print("-" * 50)
                 
-                tab_articles = self.navigate_to_tab_and_get_articles(tab, preview)
-                all_articles.extend(tab_articles)
-                
-                if preview:
-                    print(f"✅ Found {len(tab_articles)} articles in {tab} tab")
+                try:
+                    tab_articles = self.navigate_to_tab_and_get_articles(tab, preview)
+                    all_articles.extend(tab_articles)
+                    
+                    if preview:
+                        print(f"✅ Found {len(tab_articles)} articles in {tab} tab")
+                except Exception as e:
+                    self.logger.error(f"Failed to collect articles from {tab} tab: {e}")
+                    if preview:
+                        print(f"❌ Failed to collect articles from {tab} tab: {e}")
+                    continue
             
             if not all_articles:
                 self.logger.error("No articles found in any specified tabs")
+                if preview:
+                    print("❌ No articles found in any specified tabs")
+                    print("💡 Try running the debug mode to see what's happening:")
+                    print("   Uncomment the debug line in the script and run again")
                 return None
             
             if preview:
@@ -1271,15 +1333,61 @@ if __name__ == "__main__":
                 if len(all_articles) > 15:
                     print(f"... and {len(all_articles) - 15} more articles")
             
-            # Step 2: Process all articles in parallel
+            # Step 2: Process all articles - try parallel first, then fallback to sequential
             if preview:
-                print(f"\n🔄 STEP 2: Processing All Articles (Parallel)")
+                print(f"\n🔄 STEP 2: Processing All Articles")
                 print("-" * 50)
             
-            processed_articles = self.process_multiple_articles_parallel(all_articles, preview)
+            processed_articles = []
             
-            if not processed_articles:
+            # Try parallel processing first
+            try:
+                if preview:
+                    print("🚀 Attempting parallel processing...")
+                processed_articles = self.process_multiple_articles_parallel(all_articles, preview)
+                
+                if processed_articles and len(processed_articles) > 0:
+                    if preview:
+                        print(f"✅ Parallel processing successful: {len(processed_articles)} articles processed")
+                else:
+                    raise Exception("Parallel processing returned no results")
+                    
+            except Exception as e:
+                self.logger.error(f"Parallel processing failed: {e}")
+                if preview:
+                    print(f"❌ Parallel processing failed: {e}")
+                    print("💡 Trying sequential processing as fallback...")
+                
+                # Fallback to sequential processing with fewer articles
+                try:
+                    # Limit to first 3 articles for quick testing in fallback mode
+                    fallback_articles = all_articles[:3]
+                    if preview:
+                        print(f"🔄 Sequential fallback processing {len(fallback_articles)} articles...")
+                    
+                    processed_articles = self.process_multiple_articles(fallback_articles, preview)
+                    
+                    if processed_articles and len(processed_articles) > 0:
+                        if preview:
+                            print(f"✅ Sequential processing successful: {len(processed_articles)} articles processed")
+                    else:
+                        raise Exception("Sequential processing also returned no results")
+                        
+                except Exception as e2:
+                    self.logger.error(f"Sequential processing also failed: {e2}")
+                    if preview:
+                        print(f"❌ Sequential processing also failed: {e2}")
+                        print("💡 This could be due to:")
+                        print("   - Network connectivity issues")
+                        print("   - Perplexity API rate limits or errors")
+                        print("   - Article content extraction issues")
+                        print("   - Missing dependencies or configuration issues")
+                    return None
+            
+            if not processed_articles or len(processed_articles) == 0:
                 self.logger.error("No articles were successfully processed")
+                if preview:
+                    print("❌ No articles were successfully processed")
                 return None
             
             # Step 3: Generate comprehensive PDF report
@@ -1287,25 +1395,40 @@ if __name__ == "__main__":
                 print(f"\n📄 STEP 3: Generating Comprehensive PDF Report")
                 print("-" * 50)
 
-            pdf_path = self.generate_comprehensive_pdf_report(processed_articles, preview)
+            try:
+                pdf_path = self.generate_comprehensive_pdf_report(processed_articles, preview)
+            except Exception as e:
+                self.logger.error(f"Failed to generate PDF: {e}")
+                if preview:
+                    print(f"❌ Failed to generate PDF: {e}")
+                pdf_path = None
 
             # Step 4: Generate website
             if preview:
                 print(f"\n🌐 STEP 4: Generating Website")
                 print("-" * 50)
             
-            website_path = self.generate_website(processed_articles, pdf_path, preview)
+            try:
+                website_path = self.generate_website(processed_articles, pdf_path, preview)
+            except Exception as e:
+                self.logger.error(f"Failed to generate website: {e}")
+                if preview:
+                    print(f"❌ Failed to generate website: {e}")
+                website_path = None
 
             total_time = time.time() - start_time
             if preview:
                 print(f"\n✅ COMPREHENSIVE ANALYSIS COMPLETED!")
                 print("="*70)
                 print(f"📰 Total Articles Processed: {len(processed_articles)}")
-                print(f"📄 Comprehensive PDF Report: {pdf_path}")
-                print(f"🌐 Website: {website_path}")
+                if pdf_path:
+                    print(f"📄 Comprehensive PDF Report: {pdf_path}")
+                if website_path:
+                    print(f"🌐 Website: {website_path}")
                 print(f"📊 Total Analysis: {sum(len(a['summary'].split()) for a in processed_articles)} words")
                 print(f"⏱️  Total Time: {total_time:.1f} seconds")
-                print(f"⚡ Speed: {len(processed_articles)/total_time:.1f} articles/second")
+                if total_time > 0:
+                    print(f"⚡ Speed: {len(processed_articles)/total_time:.1f} articles/second")
                 print("="*70)
 
             return {
@@ -1320,7 +1443,9 @@ if __name__ == "__main__":
         except Exception as e:
             self.logger.error(f"Error in comprehensive analysis: {e}")
             if preview:
-                print(f"\n❌ ERROR: {e}")
+                print(f"\n❌ CRITICAL ERROR: {e}")
+                print("💡 Check the log file for more details:")
+                print(f"   cat {self.output_dir}/agent.log")
             return None
 
 def start_scheduler():
@@ -1347,7 +1472,7 @@ def start_scheduler():
 if __name__ == "__main__":
     # Optimized settings for speed
     tabs_to_search = ["Sales"]
-    agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=10)  # More workers
+    agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=5)  # Reduced workers for stability
     
     # Option 1: Just start the website server for existing data
     # agent.start_website_server(preview=True)
@@ -1361,10 +1486,15 @@ if __name__ == "__main__":
     if result:
         print(f"✅ Comprehensive analysis complete!")
         print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
-        print(f"📄 PDF saved to: {result['pdf_path']}")
-        print(f"🌐 Website: {result['website_path']}")
+        if result['pdf_path']:
+            print(f"📄 PDF saved to: {result['pdf_path']}")
+        if result['website_path']:
+            print(f"🌐 Website: {result['website_path']}")
     else:
         print("❌ Analysis failed. Check logs for details.")
+        print(f"💡 Log file location: {agent.output_dir}/agent.log")
+        print("💡 Try running debug mode to see what's happening:")
+        print("   Uncomment the debug line in the script and run again")
     
     # Uncomment the next line if you want to start the scheduler after the analysis
     # start_scheduler()
