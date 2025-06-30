@@ -731,7 +731,7 @@ class B2BVaultAgent:
             self.logger.error(f"Error generating comprehensive PDF: {e}")
             raise
 
-    def generate_website(self, processed_articles: List[Dict], preview: bool = False):
+    def generate_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
         """Generate a static website to display all analyzed articles."""
         self.logger.info("Generating static website")
         if preview:
@@ -1005,6 +1005,14 @@ class B2BVaultAgent:
                 
                 <div class="footer">
                     <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')} | Powered by Perplexity AI</p>
+                    {f'''<div style="margin-top: 15px;">
+                        <a href="../{os.path.basename(pdf_path)}" 
+                           class="source-link" 
+                           download
+                           style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 10px;">
+                           📄 Download PDF Report
+                        </a>
+                    </div>''' if pdf_path and os.path.exists(pdf_path) else ''}
                 </div>
             </div>
             
@@ -1284,7 +1292,7 @@ if __name__ == "__main__":
                 print(f"\n🌐 STEP 4: Generating Website")
                 print("-" * 50)
             
-            website_path = self.generate_website(processed_articles, preview)
+            website_path = self.generate_website(processed_articles, pdf_path, preview)
 
             total_time = time.time() - start_time
             if preview:
