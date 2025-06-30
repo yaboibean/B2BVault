@@ -880,12 +880,35 @@
                         <p style="color: white; opacity: 0.9; margin-bottom: 15px; font-size: 0.95rem;">
                             Get the complete analysis in PDF format with all 27 articles, detailed summaries, and actionable insights.
                         </p>
-                        <a href="b2b_vault_comprehensive_report_20250630_161238.pdf" 
+                        <!-- Use relative path for Netlify deployment -->
+                        <a href="./b2b_vault_comprehensive_report_20250630_161238.pdf" 
                            class="source-link" 
-                           download
+                           download="B2B_Vault_Analysis_Report.pdf"
+                           target="_blank"
                            style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 5px; color: white; font-weight: bold; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);">
                            📄 Download PDF Report
                         </a>
+                        <!-- Fallback link if PDF doesn't exist -->
+                        <script>
+                            // Check if PDF exists and show/hide download button accordingly
+                            fetch('./b2b_vault_comprehensive_report_20250630_161238.pdf', {method: 'HEAD'})
+                                .then(response => {
+                                    if (!response.ok) {
+                                        // PDF doesn't exist, hide the download section
+                                        const downloadSection = document.querySelector('.footer div[style*="margin-top: 20px"]');
+                                        if (downloadSection) {
+                                            downloadSection.style.display = 'none';
+                                        }
+                                    }
+                                })
+                                .catch(() => {
+                                    // Network error or PDF doesn't exist, hide the download section
+                                    const downloadSection = document.querySelector('.footer div[style*="margin-top: 20px"]');
+                                    if (downloadSection) {
+                                        downloadSection.style.display = 'none';
+                                    }
+                                });
+                        </script>
                     </div>
                 </div>
             </div>
