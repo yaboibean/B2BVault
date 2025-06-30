@@ -442,7 +442,7 @@ class B2BVaultAgent:
         # Stronger instructions for TL;DR
         prompt = f"""
         Analyze this B2B sales article and provide:
-        1. A short 2-sentence TL;DR at the very top. Each sentence must be complete, self-contained, and end with a period or other proper punctuation. it should be around 40 words.
+        1. A short 1-sentence TL;DR at the very top. Each sentence must be complete, self-contained, and end with a period or other proper punctuation. it should be around 40 words.
         2. 3-5 key takeaways
         3. Notable companies/technologies
         4. 3-5 actionable recommendations for B2B sales
@@ -452,7 +452,7 @@ class B2BVaultAgent:
         Make sure to use indenting to make it the easiest it can be to read.
 
         NO BOLD OR ITALICS. NO MARKDOWN. NO FORMATTING. JUST TEXT AND SPACING (numbers for lists are fine).
-        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT.
+        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT. JUST PLAIN TEXT, NOTHING MORE -- no bold or italics, no markdown, no formatting, just text and spacing (numbers for lists are fine).
 
         Article:
          
