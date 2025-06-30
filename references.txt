@@ -22,15 +22,58 @@ python3 -m http.server 8000
 # Then open in browser:
 # http://localhost:8000
 
-#save changes and push to github
 
-cp scraped_data/website/index.html netlify_site/index.html
 
-# 2. Stage all changes (you can narrow this if needed)
-git add netlify_site/index.html scraped_data/website/index.html references.txt
 
-# 3. Commit with a descriptive message
-git commit -m "Update index.html and data"
 
-# 4. Push to GitHub (Netlify will auto-redeploy)
-git push origin main
+UPLOAD:
+
+git init
+echo ".DS_Store" >> .gitignore
+echo "node_modules/" >> .gitignore
+echo "__pycache__/" >> .gitignore
+git add .gitignore
+git commit -m "Add .gitignore"
+git add .
+git commit -m "Initial commit: add all project files"
+git remote add origin https://github.com/your-username/your-repo-name.git
+git pull origin main --rebase
+git push --set-upstream origin main
+
+
+
+
+
+
+
+
+------------------------------------------------------
+
+
+
+
+# 1. Initialize Git (only once per project)
+git init
+
+# 2. Create a .gitignore to exclude unwanted files
+echo ".DS_Store" >> .gitignore
+echo "node_modules/" >> .gitignore
+echo "__pycache__/" >> .gitignore
+git add .gitignore
+git commit -m "Add .gitignore"
+
+# 3. Stage all files
+git add .
+
+# 4. Commit with a message
+git commit -m "Initial commit: add all project files"
+
+# 5. Link to GitHub remote (replace URL with your own repo)
+git remote add origin https://github.com/your-username/your-repo-name.git
+
+# 6. Pull remote changes first if the GitHub repo already has files (e.g., README)
+git pull origin main --rebase
+
+# 7. Push to GitHub
+git push --set-upstream origin main
+
