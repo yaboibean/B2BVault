@@ -815,7 +815,7 @@ class B2BVaultAgent:
                 </div>
                 <div class="article-preview">
                     <p>{summary_preview}</p>
-                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Analysis</button>
+                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Summary</button>
                 </div>
                 <div class="article-full" id="full-{i}" style="display: none;">
                     <div class="summary-content">
@@ -1080,7 +1080,7 @@ class B2BVaultAgent:
                         btn.textContent = 'Show Less';
                     }} else {{
                         fullDiv.style.display = 'none';
-                        btn.textContent = 'Read Full Analysis';
+                        btn.textContent = 'Read Full Summary';
                     }}
                 }}
                 
