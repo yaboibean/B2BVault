@@ -29,92 +29,85 @@ REPORT_FILENAME = "b2b_vault_report.pdf"
 def safe_get_title(card):
     """Safely extract title from a card element with retries."""
     try:
-        # The debug shows all text is combined in one line like:
-        # "Copy; Positioning; SalesPublished by:ProductLed How to create an irresistible offer..."
-        
         all_text = card.inner_text()
         
-        # Try to extract title using known patterns from the debug output
-        # Pattern: Tags + "Published by:" + Publisher + Title + Description + Buttons
+        # Debug: Print the raw text to see what we're working with
+        # print(f"DEBUG - Raw card text: {all_text[:200]}...")
         
-        # Look for "Published by:" and extract what comes after the publisher name
         if "Published by:" in all_text:
-            # Split on "Published by:" to separate tags from the rest
+            # Split on "Published by:" to get the part after publisher info
             parts = all_text.split("Published by:", 1)
             if len(parts) == 2:
-                after_published = parts[1]  # Everything after "Published by:"
+                after_published = parts[1].strip()
                 
-                # Now we need to extract: PublisherName + Title + Description + Buttons
-                # From debug: "ProductLed How to create an irresistible offer..."
-                
-                # Try to find common publisher names and extract title after them
-                publishers = ["ProductLed", "Growth Unhinged", "Gong", "Klue", "April Dunford", 
-                             "Navattic", "Chili Piper", "Trigify", "HeyReach", "MRR Unlocked",
-                             "HockeyStack", "Crossbeam", "UserGems", "The CMO", "Marketing Week",
-                             "Demand Curve"]
+                # Common publishers - extract text after these
+                publishers = [
+                    "ProductLed", "Growth Unhinged", "Gong", "Klue", "April Dunford", 
+                    "Navattic", "Chili Piper", "Trigify", "HeyReach", "MRR Unlocked",
+                    "HockeyStack", "Crossbeam", "UserGems", "The CMO", "Marketing Week",
+                    "Demand Curve"
+                ]
                 
                 for publisher in publishers:
                     if after_published.startswith(publisher):
-                        # Extract text after publisher name
-                        title_part = after_published[len(publisher):].strip()
+                        # Get text after publisher name
+                        title_text = after_published[len(publisher):].strip()
                         
-                        # Split on common endings to isolate the title
-                        # From debug, we see patterns like "Read Full ArticleRead Summary" at the end
-                        for ending in ["Read Full ArticleRead Summary", "Read Full Article", "Read Summary"]:
-                            if ending in title_part:
-                                title_part = title_part.split(ending)[0].strip()
-                                break
+                        # Clean up - remove button text and descriptions
+                        if "Read Full Article" in title_text:
+                            title_text = title_text.split("Read Full Article")[0].strip()
+                        if "Read Summary" in title_text:
+                            title_text = title_text.split("Read Summary")[0].strip()
                         
-                        # Further clean by removing description that often starts with certain words
-                        # Look for description patterns and cut before them
-                        desc_starters = ["Make an offer so good", "Most", "Many", "Big SaaS", 
-                                       "Want better", "Looking at all", "If you want", "In just one",
-                                       "This report", "Old customers", "Not all leads", "Know when"]
+                        # Look for sentence boundaries to extract just the title
+                        sentences = title_text.split('.')
+                        if sentences and len(sentences[0].strip()) > 10:
+                            potential_title = sentences[0].strip()
+                            if len(potential_title) < 200:  # Reasonable title length
+                                return potential_title
                         
-                        for starter in desc_starters:
-                            if starter in title_part:
-                                title_part = title_part.split(starter)[0].strip()
-                                break
-                        
-                        # Clean up the title
-                        if title_part and len(title_part) > 10 and len(title_part) < 200:
-                            # Remove any remaining unwanted text
-                            title_part = title_part.replace("Read Full", "").replace("Read Summary", "").strip()
-                            if title_part:
-                                return title_part
+                        # Fallback: take first reasonable chunk
+                        words = title_text.split()
+                        if len(words) >= 4:
+                            # Take first 10-15 words as title
+                            title_words = words[:15]
+                            title_candidate = ' '.join(title_words)
+                            if len(title_candidate) > 20 and len(title_candidate) < 200:
+                                return title_candidate
                 
-                # If no publisher match found, try to extract title differently
-                # Look for text patterns that look like titles
-                # Titles are usually longer and come before descriptions
+                # If no publisher match, try to extract title from the text after "Published by:"
+                # Skip the first word (likely publisher) and look for title patterns
                 words = after_published.split()
                 if len(words) > 3:
-                    # Try to find where the title ends by looking for description patterns
-                    title_words = []
-                    for i, word in enumerate(words):
-                        # Skip publisher names at the start
-                        if i < 5 and word in ["ProductLed", "Gong", "Klue", "Growth", "Unhinged", "April", "Dunford"]:
-                            continue
+                    # Skip first 1-2 words (publisher), then look for title
+                    for start_idx in range(1, min(3, len(words))):
+                        title_words = []
+                        for word in words[start_idx:]:
+                            if word.lower() in ['read', 'make', 'most', 'many', 'want', 'looking', 'if', 'in', 'this']:
+                                break
+                            title_words.append(word)
+                            if len(' '.join(title_words)) > 60:  # Reasonable title length
+                                break
                         
-                        # Stop at description starters or buttons
-                        if word.lower() in ["make", "most", "many", "big", "want", "looking", "if", "in", "this", "old", "not", "know", "read"]:
-                            break
-                        
-                        title_words.append(word)
-                        
-                        # Stop if we have a reasonable title length
-                        if len(" ".join(title_words)) > 50:
-                            break
-                    
-                    if title_words:
-                        potential_title = " ".join(title_words).strip()
-                        if len(potential_title) > 15:
-                            return potential_title
+                        if len(title_words) >= 4:
+                            title_candidate = ' '.join(title_words)
+                            if len(title_candidate) > 15 and len(title_candidate) < 200:
+                                return title_candidate
+        
+        # Last resort: try to find text that looks like a title in the full text
+        lines = all_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Skip short lines, tags, and button text
+            if (len(line) > 20 and len(line) < 150 and 
+                not line.lower().startswith(('copy', 'positioning', 'sales', 'published by', 'read full', 'read summary')) and
+                not line.lower() in ['read full article', 'read summary']):
+                return line
         
         return "Untitled Article"
 
     except Exception as e:
         print(f"DEBUG TITLE - Exception: {e}")
-        logging.warning(f"Could not extract title: {e}")
         return "Untitled Article"
 
 def safe_get_publisher(card):
@@ -122,12 +115,10 @@ def safe_get_publisher(card):
     try:
         all_text = card.inner_text()
         
-        # From debug: "Copy; Positioning; SalesPublished by:ProductLed How to create..."
         if "Published by:" in all_text:
-            # Extract text immediately after "Published by:"
-            after_published = all_text.split("Published by:", 1)[1]
+            after_published = all_text.split("Published by:", 1)[1].strip()
             
-            # Common publishers from the debug output
+            # Known publishers
             publishers = [
                 "ProductLed", "Growth Unhinged", "Gong", "Klue", "April Dunford", 
                 "Navattic", "Chili Piper", "Trigify", "HeyReach", "MRR Unlocked",
@@ -135,20 +126,22 @@ def safe_get_publisher(card):
                 "Demand Curve"
             ]
             
-            # Check which publisher name appears first
             for publisher in publishers:
                 if after_published.startswith(publisher):
                     return publisher
             
-            # If no exact match, try to extract first few words as publisher
+            # Fallback: take first word(s) as publisher
             words = after_published.split()
-            if words:
-                # Try 1-2 words as publisher name
-                if len(words) >= 2 and not words[1][0].islower():  # Second word also capitalized
+            if len(words) >= 1:
+                if len(words) >= 2 and words[1][0].isupper():  # Two capitalized words
                     return f"{words[0]} {words[1]}"
                 else:
                     return words[0]
         
+        return "Unknown Publisher"
+        
+    except Exception as e:
+        print(f"DEBUG PUBLISHER - Exception: {e}")
         return "Unknown Publisher"
         
     except Exception as e:
@@ -266,12 +259,20 @@ class B2BVaultAgent:
                             seen_urls.add(href)
                             
                             # Fast title/publisher extraction
-                            try:
-                                title = safe_get_title(card)
-                                publisher = safe_get_publisher(card)
-                            except:
-                                title = f"Article {len(articles) + 1} from {tab_name}"
-                                publisher = "Unknown Publisher"
+                        try:
+                            title = safe_get_title(card)
+                            publisher = safe_get_publisher(card)
+                            
+                            # Debug output
+                            if preview and len(articles) < 5:  # Show first 5 for debugging
+                                print(f"   DEBUG - Extracted title: '{title}'")
+                                print(f"   DEBUG - Extracted publisher: '{publisher}'")
+                        except Exception as e:
+                            title = f"Article {len(articles) + 1} from {tab_name}"
+                            publisher = "Unknown Publisher"
+                            if preview:
+                                print(f"   DEBUG - Title extraction failed: {e}")
+
                             
                             articles.append({
                                 "title": title,
@@ -448,11 +449,16 @@ class B2BVaultAgent:
 
         Do not use any formatting (no bold, italics, or markdown). Do not mention the prompt or instructions in your answer.
 
-        Article: {article_content[:4000]}
+        NO BOLD OR ITALICS. NO MARKDOWN. NO FORMATTING. JUST TEXT AND SPACING (numbers for lists are fine).
+        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT.
+
+        Article:
+         
+         {article_content[:4000]}
         """
         
         payload = {
-            "model": "sonar-pro",
+            "model": "sonar",
             "messages": [
                 {"role": "system", "content": "You are a B2B sales analyst. For the TL;DR, always write two complete sentences that end with a period or other proper punctuation. Never let a TL;DR sentence trail off or end with '...' or incomplete thoughts. If the model tries to end with '...', finish the sentence properly."},
                 {"role": "user", "content": prompt}
@@ -971,7 +977,7 @@ class B2BVaultAgent:
             <div class="container">
                 <div class="header">
                     <h1>B2B Vault Analysis Dashboard</h1>
-                    <p>AI-Powered Insights from B2B Sales Articles</p>
+                    <p>B2B Vault articles summaries</p>
                     
                     <div class="stats">
                         <div class="stat-card">
