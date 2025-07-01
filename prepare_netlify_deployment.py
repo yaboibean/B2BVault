@@ -552,8 +552,14 @@ def prepare_netlify_deployment():
             </div>
         </div>
         
-        <div class="navigation">
-            {f'<a href="./index.html" class="nav-link dashboard-available">📊 View Analysis Dashboard</a>' if dashboard_exists else ''}
+        <div class="navigation">"""
+    
+    # Add navigation with conditional dashboard link
+    if dashboard_exists:
+        scraper_html += '''
+            <a href="./index.html" class="nav-link dashboard-available">📊 View Analysis Dashboard</a>'''
+    
+    scraper_html += f"""
             <a href="https://github.com/yourusername/B2BVaultScraper" class="nav-link" target="_blank">📚 Download Scraper</a>
             <a href="#" class="nav-link" onclick="showUpdateInstructions()">🔄 Update Instructions</a>
         </div>
@@ -714,8 +720,22 @@ def prepare_netlify_deployment():
                 const tagList = tags.split(',');
                 tagList.forEach(tag => {{
                     const checkbox = document.querySelector(`input[value="${{tag.trim()}}"]`);
-                    if
-"""
+                    if (checkbox) {{
+                        checkbox.checked = true;
+                    }}
+                }});
+                generateCommand();
+            }}
+        }};
+    </script>
+</body>
+</html>"""
+    
+    with open(os.path.join(netlify_site_dir, "scraper.html"), "w", encoding="utf-8") as f:
+        f.write(scraper_html)
+    
+    # 4. Create Netlify configuration files
+    print("✅ Creating Netlify configuration...")
     
     netlify_toml = """[build]
       publish = "."
