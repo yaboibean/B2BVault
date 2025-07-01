@@ -7,6 +7,7 @@ import os
 import threading
 import time
 from B2Bscraper import B2BVaultAgent
+from playwright.sync_api import sync_playwright
 import json
 
 app = Flask(__name__)
@@ -21,20 +22,64 @@ scraping_status = {
     'log_messages': []
 }
 
-# Available tags from B2B Vault
+# Available tags from B2B Vault - will be dynamically fetched
 AVAILABLE_TAGS = [
+    "All",
+    "Content Marketing", 
+    "Demand Generation",
+    "ABM & GTM",
+    "Paid Marketing",
+    "Marketing Ops",
+    "Event Marketing",
+    "AI",
+    "Product Marketing",
     "Sales",
-    "Marketing", 
-    "Growth",
-    "Product",
-    "Leadership",
-    "Strategy",
-    "Customer Success",
-    "Operations",
-    "Finance",
-    "HR",
-    "Technology"
+    "General",
+    "Affiliate & Partnerships",
+    "Copy & Positioning"
 ]
+
+def fetch_tags_from_b2b_vault():
+    """Dynamically fetch available tags from B2B Vault website"""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # Navigate to B2B Vault
+            page.goto("https://www.theb2bvault.com/", timeout=20000)
+            page.wait_for_timeout(2000)  # Wait for page to load
+            
+            # Look for tab elements that contain the category names
+            tab_elements = page.locator("a[data-w-tab]").all()
+            
+            tags = []
+            for tab_element in tab_elements:
+                try:
+                    tab_name = tab_element.get_attribute("data-w-tab")
+                    if tab_name and tab_name not in tags:
+                        tags.append(tab_name)
+                except:
+                    continue
+            
+            browser.close()
+            
+            # If we successfully found tags, return them
+            if tags:
+                print(f"✅ Successfully fetched {len(tags)} tags from B2B Vault: {tags}")
+                return sorted(tags)  # Sort alphabetically
+            else:
+                print("⚠️ No tags found, using fallback list")
+                return AVAILABLE_TAGS
+                
+    except Exception as e:
+        print(f"⚠️ Error fetching tags from B2B Vault: {e}")
+        print("🔄 Using fallback tag list")
+        return AVAILABLE_TAGS
+
+# Fetch tags on startup
+print("🔍 Fetching available tags from B2B Vault...")
+AVAILABLE_TAGS = fetch_tags_from_b2b_vault()
 
 class WebScrapingLogger:
     """Custom logger to capture messages for web interface"""
@@ -64,18 +109,29 @@ def run_scraping_task(selected_tags):
         scraping_status['log_messages'] = []
         web_logger.messages = []
         
+        # Filter out "All" if it's selected, as it's not a real tag
+        filtered_tags = [tag for tag in selected_tags if tag != "All"]
+        
+        # If "All" was selected, use all available tags except "All"
+        if "All" in selected_tags:
+            filtered_tags = [tag for tag in AVAILABLE_TAGS if tag != "All"]
+            web_logger.add_message(f"'All' selected - scraping all {len(filtered_tags)} categories")
+        
+        if not filtered_tags:
+            raise Exception("No valid tags selected for scraping")
+        
         # Initialize agent with selected tags
-        agent = B2BVaultAgent(tabs_to_search=selected_tags, max_workers=3)
+        agent = B2BVaultAgent(tabs_to_search=filtered_tags, max_workers=3)
         
         # Step 1: Collect articles
         scraping_status['current_step'] = 'Collecting articles from B2B Vault...'
         scraping_status['progress'] = 10
-        web_logger.add_message(f"Starting scraping for tags: {', '.join(selected_tags)}")
+        web_logger.add_message(f"Starting scraping for tags: {', '.join(filtered_tags)}")
         
         all_articles = []
-        for i, tag in enumerate(selected_tags):
+        for i, tag in enumerate(filtered_tags):
             scraping_status['current_step'] = f'Collecting {tag} articles...'
-            scraping_status['progress'] = 10 + (i * 20 // len(selected_tags))
+            scraping_status['progress'] = 10 + (i * 20 // len(filtered_tags))
             web_logger.add_message(f"Collecting articles from {tag} tab...")
             
             try:
@@ -137,7 +193,8 @@ def run_scraping_task(selected_tags):
             'processed_articles': len(processed_articles),
             'pdf_path': pdf_path,
             'website_path': website_path,
-            'selected_tags': selected_tags
+            'selected_tags': selected_tags,
+            'filtered_tags': filtered_tags
         }
         web_logger.add_message("Scraping completed successfully!")
         
@@ -174,7 +231,7 @@ def index():
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -208,10 +265,19 @@ def index():
             font-size: 1.3rem;
         }
         
+        .tags-info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #2c3e50;
+        }
+        
         .tags-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
             margin-bottom: 30px;
         }
         
@@ -221,7 +287,7 @@ def index():
         
         .tag-label {
             display: block;
-            padding: 15px 20px;
+            padding: 12px 16px;
             background: #f8f9fa;
             border: 2px solid #e9ecef;
             border-radius: 10px;
@@ -229,6 +295,7 @@ def index():
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: 500;
+            font-size: 0.9rem;
         }
         
         .tag-label:hover {
@@ -240,6 +307,18 @@ def index():
             background: #667eea;
             color: white;
             border-color: #667eea;
+        }
+        
+        .tag-label.all-tag {
+            background: #27ae60;
+            color: white;
+            border-color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .tag-checkbox:checked + .tag-label.all-tag {
+            background: #219a52;
+            border-color: #219a52;
         }
         
         .controls {
@@ -368,24 +447,30 @@ def index():
     <div class="container">
         <div class="header">
             <h1>🚀 B2B Vault Scraper</h1>
-            <p>Select the tags you want to scrape from B2B Vault and generate AI-powered insights</p>
+            <p>Select the categories you want to scrape from B2B Vault and generate AI-powered insights</p>
         </div>
         
         <div class="tag-selection">
-            <h2>📑 Select Tags to Scrape:</h2>
+            <h2>📑 Select Categories to Scrape:</h2>
+            <div class="tags-info">
+                💡 <strong>Tip:</strong> Select "All" to scrape every category, or choose specific categories you're interested in. 
+                Categories are dynamically fetched from B2B Vault.
+            </div>
             <div class="tags-grid" id="tagsGrid">
                 {% for tag in available_tags %}
                 <div>
                     <input type="checkbox" id="tag-{{ loop.index0 }}" class="tag-checkbox" value="{{ tag }}">
-                    <label for="tag-{{ loop.index0 }}" class="tag-label">{{ tag }}</label>
+                    <label for="tag-{{ loop.index0 }}" class="tag-label {% if tag == 'All' %}all-tag{% endif %}">
+                        {% if tag == 'All' %}🌟 {{ tag }}{% else %}{{ tag }}{% endif %}
+                    </label>
                 </div>
                 {% endfor %}
             </div>
         </div>
         
         <div class="controls">
-            <button class="btn btn-secondary" onclick="selectAll()">Select All</button>
-            <button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+            <button class="btn btn-secondary" onclick="selectAll()">Select All Categories</button>
+            <button class="btn btn-secondary" onclick="clearAll()">Clear Selection</button>
             <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start Scraping</button>
         </div>
         
@@ -408,8 +493,11 @@ def index():
         let pollingInterval;
         
         function selectAll() {
-            const checkboxes = document.querySelectorAll('.tag-checkbox');
-            checkboxes.forEach(cb => cb.checked = true);
+            // Check the "All" checkbox
+            const allCheckbox = document.querySelector('input[value="All"]');
+            if (allCheckbox) {
+                allCheckbox.checked = true;
+            }
         }
         
         function clearAll() {
@@ -454,7 +542,7 @@ def index():
             const selectedTags = getSelectedTags();
             
             if (selectedTags.length === 0) {
-                showError('Please select at least one tag to scrape.');
+                showError('Please select at least one category to scrape.');
                 return;
             }
             
@@ -505,10 +593,13 @@ def index():
                     document.getElementById('startBtn').disabled = false;
                 } else if (!data.is_running && data.results) {
                     clearInterval(pollingInterval);
+                    const tags = data.results.selected_tags.includes('All') ? 
+                                 `All categories (${data.results.filtered_tags.length} total)` : 
+                                 data.results.selected_tags.join(', ');
                     showSuccess(`
                         🎉 Scraping completed successfully!<br>
                         📊 Processed ${data.results.processed_articles}/${data.results.total_articles} articles<br>
-                        📑 Tags: ${data.results.selected_tags.join(', ')}<br>
+                        📑 Categories: ${tags}<br>
                         <br>
                         <a href="/results" style="color: white; text-decoration: underline;">View Results</a>
                     `);
@@ -538,6 +629,16 @@ def index():
 </html>
     """
     return render_template_string(html_template, available_tags=AVAILABLE_TAGS, scraping_status=scraping_status)
+
+@app.route('/refresh_tags')
+def refresh_tags():
+    """Endpoint to refresh tags from B2B Vault"""
+    global AVAILABLE_TAGS
+    try:
+        AVAILABLE_TAGS = fetch_tags_from_b2b_vault()
+        return jsonify({'success': True, 'tags': AVAILABLE_TAGS, 'count': len(AVAILABLE_TAGS)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/start_scraping', methods=['POST'])
 def start_scraping():
@@ -658,6 +759,10 @@ def view_results():
             font-size: 0.9rem;
         }
         
+        .tag-badge.all-badge {
+            background: #27ae60;
+        }
+        
         .actions {
             text-align: center;
             margin-top: 30px;
@@ -722,16 +827,23 @@ def view_results():
                 <div class="result-label">Articles Processed</div>
             </div>
             <div class="result-card">
-                <span class="result-number">{{ results.selected_tags|length }}</span>
-                <div class="result-label">Tags Scraped</div>
+                <span class="result-number">{{ results.filtered_tags|length if results.filtered_tags else results.selected_tags|length }}</span>
+                <div class="result-label">Categories Scraped</div>
             </div>
         </div>
         
         <div class="tags-section">
-            <h3>📑 Scraped Tags:</h3>
-            {% for tag in results.selected_tags %}
-            <span class="tag-badge">{{ tag }}</span>
-            {% endfor %}
+            <h3>📑 Scraped Categories:</h3>
+            {% if 'All' in results.selected_tags %}
+                <span class="tag-badge all-badge">🌟 All Categories</span>
+                <p style="margin-top: 10px; color: #666; font-size: 0.9rem;">
+                    Scraped {{ results.filtered_tags|length }} categories: {{ results.filtered_tags|join(', ') }}
+                </p>
+            {% else %}
+                {% for tag in results.selected_tags %}
+                <span class="tag-badge">{{ tag }}</span>
+                {% endfor %}
+            {% endif %}
         </div>
         
         <div class="actions">
@@ -740,7 +852,7 @@ def view_results():
             </a>
             
             <a href="/" class="btn btn-secondary">
-                🔄 Scrape More Tags
+                🔄 Scrape More Categories
             </a>
         </div>
         
@@ -785,6 +897,7 @@ def start_website_server():
 
 if __name__ == '__main__':
     print("🚀 Starting B2B Vault Interactive Scraper...")
+    print(f"📑 Found {len(AVAILABLE_TAGS)} categories: {', '.join(AVAILABLE_TAGS)}")
     print("🌐 Open your browser to: http://localhost:5001")
     print("⏹️  Press Ctrl+C to stop the server")
     app.run(host='127.0.0.1', port=5001, debug=False)

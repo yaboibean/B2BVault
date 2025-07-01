@@ -25,11 +25,13 @@ def start_web_interface():
     install_flask()
     
     print("🌐 Starting interactive web server...")
+    print("🔍 Fetching available categories from B2B Vault...")
     print("📱 Opening in your browser...")
     print("⏹️  Press Ctrl+C to stop the server")
     print("=" * 50)
     print("🔗 Web Interface: http://localhost:5001")
-    print("💡 Select tags → Start scraping → View results!")
+    print("💡 Select categories → Start scraping → View results!")
+    print("📑 All available B2B Vault categories will be loaded automatically")
     print("=" * 50)
     
     # Give server time to start
@@ -42,7 +44,5 @@ def start_web_interface():
     from interactive_server import app
     app.run(host='127.0.0.1', port=5001, debug=False)
 
-if __name__ == "__main__":
-    start_web_interface()
 if __name__ == "__main__":
     start_web_interface()
