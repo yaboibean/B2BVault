@@ -1471,25 +1471,33 @@ def start_scheduler():
 
 if __name__ == "__main__":
     import sys
+    import argparse
     
-    # Check if running from web interface
-    if len(sys.argv) > 1 and sys.argv[1] == '--web':
+    # Add command line argument parsing
+    parser = argparse.ArgumentParser(description='B2B Vault Scraper')
+    parser.add_argument('--web', action='store_true', help='Start web interface')
+    parser.add_argument('--tags', type=str, help='Comma-separated list of tags to scrape (e.g., "Sales,Marketing,AI")')
+    parser.add_argument('--generate-netlify', action='store_true', help='Generate Netlify-ready static site after scraping')
+    
+    args = parser.parse_args()
+    
+    if args.web:
         print("🌐 Starting B2B Vault Scraper Interactive Web Interface...")
         print("📱 Open your browser to: http://localhost:5001")
         from interactive_server import app
         app.run(host='127.0.0.1', port=5001, debug=False)
     else:
-        # Original command line interface
-        tabs_to_search = ["Sales"]
+        # Determine tags to search
+        if args.tags:
+            tabs_to_search = [tag.strip() for tag in args.tags.split(',')]
+            print(f"🎯 Scraping selected tags: {', '.join(tabs_to_search)}")
+        else:
+            tabs_to_search = ["Sales"]
+            print("🎯 No tags specified, defaulting to Sales")
+        
         agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=5)
         
-        # Option 1: Just start the website server for existing data
-        # agent.start_website_server(preview=True)
-        
-        # Option 2: Enable debug mode
-        # agent.debug_card_structure(preview=True)
-        
-        # Option 3: Run full comprehensive analysis
+        # Run comprehensive analysis
         result = agent.run_comprehensive_analysis(preview=True)
         
         if result:
@@ -1499,11 +1507,19 @@ if __name__ == "__main__":
                 print(f"📄 PDF saved to: {result['pdf_path']}")
             if result['website_path']:
                 print(f"🌐 Website: {result['website_path']}")
+            
+            # Generate Netlify site if requested
+            if args.generate_netlify:
+                print("\n🌐 Generating Netlify-ready static site...")
+                try:
+                    from interactive_server import generate_netlify_site
+                    # This would need to be refactored to work outside Flask context
+                    print("💡 To generate Netlify site, run: python3 prepare_netlify_deployment.py")
+                except Exception as e:
+                    print(f"⚠️  Use prepare_netlify_deployment.py instead: {e}")
         else:
             print("❌ Analysis failed. Check logs for details.")
             print(f"💡 Log file location: {agent.output_dir}/agent.log")
-            print("💡 Try running debug mode to see what's happening:")
-            print("   Uncomment the debug line in the script and run again")
     
     # Uncomment the next line if you want to start the scheduler after the analysis
     # start_scheduler()

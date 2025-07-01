@@ -962,6 +962,321 @@ def generate_static_site():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/generate_netlify_site')
+def generate_netlify_site():
+    """Generate a complete static site ready for Netlify deployment"""
+    try:
+        import shutil
+        import glob
+        
+        # Create netlify_site directory
+        netlify_dir = "netlify_site"
+        os.makedirs(netlify_dir, exist_ok=True)
+        
+        # Get the latest scraped data
+        scraped_data_dir = "scraped_data"
+        
+        # Find the latest website
+        website_dir = os.path.join(scraped_data_dir, "website")
+        if os.path.exists(os.path.join(website_dir, "index.html")):
+            # Copy the generated website to netlify_site
+            src_index = os.path.join(website_dir, "index.html")
+            dst_index = os.path.join(netlify_dir, "index.html")
+            shutil.copy2(src_index, dst_index)
+            
+            # Copy any PDF files with expected naming
+            pdf_files = glob.glob(os.path.join(scraped_data_dir, "*.pdf"))
+            if pdf_files:
+                latest_pdf = max(pdf_files, key=os.path.getmtime)
+                expected_pdf_name = f"b2b_vault_comprehensive_report_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
+                dst_pdf = os.path.join(netlify_dir, expected_pdf_name)
+                shutil.copy2(latest_pdf, dst_pdf)
+                
+                # Update the HTML to reference the correct PDF
+                with open(dst_index, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                # Replace PDF references
+                html_content = html_content.replace(
+                    "../b2b_vault_comprehensive_report_20250630_161238.pdf",
+                    f"./{expected_pdf_name}"
+                )
+                
+                with open(dst_index, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+            
+            # Create _redirects file for Netlify
+            redirects_content = """# Netlify redirects
+/api/* /404.html 404
+/* /index.html 200
+"""
+            with open(os.path.join(netlify_dir, "_redirects"), "w") as f:
+                f.write(redirects_content)
+            
+            # Create netlify.toml
+            netlify_toml = """[build]
+  publish = "."
+  
+[build.environment]
+  NODE_VERSION = "16"
+
+[[headers]]
+  for = "*.pdf"
+  [headers.values]
+    Content-Type = "application/pdf"
+    Cache-Control = "public, max-age=86400"
+    
+[[headers]]
+  for = "*.html"
+  [headers.values]
+    Content-Type = "text/html; charset=utf-8"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Content-Type = "application/javascript"
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Content-Type = "text/css"
+    Cache-Control = "public, max-age=86400"
+"""
+            with open(os.path.join(netlify_dir, "netlify.toml"), "w") as f:
+                f.write(netlify_toml)
+            
+            # Create a static tag selector page for Netlify
+            tag_selector_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B2B Vault Scraper - Tag Selection</title>
+    <style>
+        /* Same CSS as interactive server */
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        
+        .container {{
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }}
+        
+        .header {{
+            text-align: center;
+            margin-bottom: 40px;
+        }}
+        
+        .header h1 {{
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }}
+        
+        .info-box {{
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }}
+        
+        .tags-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 30px;
+        }}
+        
+        .tag-checkbox {{
+            display: none;
+        }}
+        
+        .tag-label {{
+            display: block;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }}
+        
+        .tag-label:hover {{
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }}
+        
+        .tag-checkbox:checked + .tag-label {{
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }}
+        
+        .btn {{
+            padding: 15px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+        
+        .btn-primary {{
+            background: #667eea;
+            color: white;
+        }}
+        
+        .command-output {{
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            margin-top: 20px;
+            display: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 B2B Vault Scraper</h1>
+            <p>Static Version - Generate Scraping Commands</p>
+        </div>
+        
+        <div class="info-box">
+            <h3>📋 How to Use (Static Version):</h3>
+            <ol>
+                <li>Select the categories you want to scrape</li>
+                <li>Click "Generate Command" to get the Python command</li>
+                <li>Run the command locally to scrape and generate the website</li>
+                <li>Deploy the generated files to Netlify</li>
+            </ol>
+        </div>
+        
+        <div class="tag-selection">
+            <h2>📑 Select Categories to Scrape:</h2>
+            <div class="tags-grid">
+                {chr(10).join(f'''
+                <div>
+                    <input type="checkbox" id="tag-{i}" class="tag-checkbox" value="{tag}">
+                    <label for="tag-{i}" class="tag-label">{tag}</label>
+                </div>''' for i, tag in enumerate(AVAILABLE_TAGS))}
+            </div>
+        </div>
+        
+        <div class="controls" style="text-align: center;">
+            <button class="btn btn-primary" onclick="generateCommand()">Generate Scraping Command</button>
+        </div>
+        
+        <div class="command-output" id="commandOutput">
+            <h3>📋 Copy and run this command:</h3>
+            <div id="commandText"></div>
+        </div>
+    </div>
+
+    <script>
+        function generateCommand() {{
+            const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedTags.length === 0) {{
+                alert('Please select at least one category');
+                return;
+            }}
+            
+            const tagsParam = selectedTags.join(',');
+            const command = `python3 B2Bscraper.py --tags="${tagsParam}"`;
+            
+            document.getElementById('commandText').textContent = command;
+            document.getElementById('commandOutput').style.display = 'block';
+        }}
+    </script>
+</body>
+</html>
+            """
+            
+            with open(os.path.join(netlify_dir, "scraper.html"), "w", encoding="utf-8") as f:
+                f.write(tag_selector_html)
+            
+            # Create deployment README
+            readme_content = f"""# B2B Vault Analysis Dashboard
+
+## 🌐 Live Demo
+Visit the analysis dashboard: [View Dashboard](./index.html)
+
+## 🔧 How to Update Content
+
+### Option 1: Use the Static Scraper (Recommended for Netlify)
+1. Visit [scraper.html](./scraper.html) to generate scraping commands
+2. Run the generated command locally
+3. Upload the new files to Netlify
+
+### Option 2: Run Locally
+```bash
+# Install dependencies
+pip install playwright beautifulsoup4 flask requests tenacity weasyprint
+
+# Run scraper with specific tags
+python3 B2Bscraper.py --tags="Sales,Marketing,AI"
+
+# Generate static site for Netlify
+python3 prepare_netlify_deployment.py
+```
+
+## 📁 Files Included
+- `index.html` - Main dashboard with analyzed articles
+- `scraper.html` - Static tag selector for generating commands
+- `*.pdf` - Comprehensive analysis report
+- `netlify.toml` - Netlify configuration
+- `_redirects` - Netlify redirects configuration
+
+## 🚀 Deployment
+1. Upload all files to Netlify
+2. Set publish directory to root (.)
+3. The site will work immediately!
+
+Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}
+"""
+            
+            with open(os.path.join(netlify_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write(readme_content)
+            
+            files_list = os.listdir(netlify_dir)
+            return jsonify({
+                'success': True, 
+                'message': f'Netlify-ready static site generated in {netlify_dir}',
+                'files': files_list,
+                'deployment_ready': True
+            })
+        else:
+            return jsonify({'error': 'No website data found. Run scraping first.'}), 404
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("🚀 Starting B2B Vault Interactive Scraper...")
     print(f"📑 Found {len(AVAILABLE_TAGS)} categories: {', '.join(AVAILABLE_TAGS)}")
