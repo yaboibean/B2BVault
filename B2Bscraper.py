@@ -1474,10 +1474,10 @@ if __name__ == "__main__":
     
     # Check if running from web interface
     if len(sys.argv) > 1 and sys.argv[1] == '--web':
-        print("🌐 Starting B2B Vault Scraper Web Interface...")
-        print("📱 Open your browser to: http://localhost:5000")
-        from web_interface import app
-        app.run(host='127.0.0.1', port=5000, debug=False)
+        print("🌐 Starting B2B Vault Scraper Interactive Web Interface...")
+        print("📱 Open your browser to: http://localhost:5001")
+        from interactive_server import app
+        app.run(host='127.0.0.1', port=5001, debug=False)
     else:
         # Original command line interface
         tabs_to_search = ["Sales"]
