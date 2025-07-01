@@ -430,6 +430,11 @@ def prepare_netlify_deployment():
                 <h2>📑 Select Categories to Scrape:</h2>
                 <div class="tags-grid">"""
     
+    # Define available tags (replace with your actual categories as needed)
+    available_tags = [
+        "All", "Sales", "Marketing", "AI", "Fintech", "Payments", "Security", "Compliance", "Crypto", "Banking"
+    ]
+
     # Add tag checkboxes
     for i, tag in enumerate(available_tags):
         tag_class = "all-tag" if tag == "All" else ""
@@ -712,8 +717,31 @@ def prepare_netlify_deployment():
                     if
 """
     
+    netlify_toml = """[build]
+      publish = "."
+    
+    [[redirects]]
+      from = "/scraper"
+      to = "/scraper.html"
+      status = 301
+    
+    [[redirects]]
+      from = "/dashboard"
+      to = "/index.html"
+      status = 301
+    
+    [[redirects]]
+      from = "/api/*"
+      to = "/404.html"
+      status = 404
+    
+    [[redirects]]
+      from = "/*"
+      to = "/index.html"
+      status = 200
+    """
     with open(os.path.join(netlify_site_dir, "netlify.toml"), "w") as f:
-        f.write(netlify_toml)
+            f.write(netlify_toml)
     
     redirects_content = """# Netlify redirects
 /scraper /scraper.html 301
