@@ -1,3 +1,5 @@
 # Netlify redirects
-/pdf /b2b_vault_comprehensive_report_20250630_161238.pdf 302
+/scraper /scraper.html 301
+/dashboard /index.html 301
+/api/* /404.html 404
 /* /index.html 200
