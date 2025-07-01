@@ -707,7 +707,24 @@ def prepare_netlify_deployment():
             const savedTags = history[index].tags;
             savedTags.forEach(tag => {{
                 const checkbox = document.querySelector(`input[value="${{tag}}"]`);
-                if
+                if (checkbox) {{
+                    checkbox.checked = true;
+                }}
+            }});
+            
+            switchTab('command');
+            alert('Selection loaded! You can now generate the command.');
+        }}
+        
+        function generateFromHistory(index) {{
+            loadSelection(index);
+            setTimeout(() => {{
+                generateCommand();
+            }}, 100);
+        }}
+        
+        function clearHistory() {{
+            if (confirm('Are you sure you want to clear all saved selections?')) {{
                 localStorage.removeItem('b2bVaultHistory');
                 loadHistory();
             }}
@@ -731,6 +748,7 @@ def prepare_netlify_deployment():
 </body>
 </html>"""
     
+    # Save the enhanced scraper HTML
     with open(os.path.join(netlify_site_dir, "scraper.html"), "w", encoding="utf-8") as f:
         f.write(scraper_html)
     
