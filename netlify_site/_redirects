@@ -1,0 +1,3 @@
+# Netlify redirects
+/pdf /b2b_vault_comprehensive_report_20250630_161238.pdf 302
+/* /index.html 200

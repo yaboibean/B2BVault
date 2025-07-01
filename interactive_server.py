@@ -895,6 +895,73 @@ def start_website_server():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/generate_static_site')
+def generate_static_site():
+    """Generate a complete static site for Netlify deployment"""
+    try:
+        # Create netlify_site directory
+        netlify_dir = "netlify_site"
+        os.makedirs(netlify_dir, exist_ok=True)
+        
+        # Get the latest scraped data
+        scraped_data_dir = "scraped_data"
+        
+        # Find the latest website
+        website_dir = os.path.join(scraped_data_dir, "website")
+        if os.path.exists(os.path.join(website_dir, "index.html")):
+            # Copy the generated website to netlify_site
+            import shutil
+            
+            # Copy index.html
+            src_index = os.path.join(website_dir, "index.html")
+            dst_index = os.path.join(netlify_dir, "index.html")
+            shutil.copy2(src_index, dst_index)
+            
+            # Copy any PDF files
+            import glob
+            pdf_files = glob.glob(os.path.join(scraped_data_dir, "*.pdf"))
+            if pdf_files:
+                latest_pdf = max(pdf_files, key=os.path.getmtime)
+                expected_pdf_name = "b2b_vault_comprehensive_report_20250630_161238.pdf"
+                dst_pdf = os.path.join(netlify_dir, expected_pdf_name)
+                shutil.copy2(latest_pdf, dst_pdf)
+            
+            # Create _redirects file for Netlify
+            redirects_content = """# Netlify redirects
+/pdf /b2b_vault_comprehensive_report_20250630_161238.pdf 302
+/* /index.html 200
+"""
+            with open(os.path.join(netlify_dir, "_redirects"), "w") as f:
+                f.write(redirects_content)
+            
+            # Create netlify.toml
+            netlify_toml = """[build]
+  publish = "."
+
+[[headers]]
+  for = "*.pdf"
+  [headers.values]
+    Content-Type = "application/pdf"
+    
+[[headers]]
+  for = "*.html"
+  [headers.values]
+    Content-Type = "text/html; charset=utf-8"
+"""
+            with open(os.path.join(netlify_dir, "netlify.toml"), "w") as f:
+                f.write(netlify_toml)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Static site generated in {netlify_dir}',
+                'files': os.listdir(netlify_dir)
+            })
+        else:
+            return jsonify({'error': 'No website data found. Run scraping first.'}), 404
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("🚀 Starting B2B Vault Interactive Scraper...")
     print(f"📑 Found {len(AVAILABLE_TAGS)} categories: {', '.join(AVAILABLE_TAGS)}")

@@ -20,6 +20,7 @@ def install_flask():
 def start_web_interface():
     """Start the web interface"""
     print("🚀 Starting B2B Vault Scraper Interactive Web Interface...")
+    print("💡 NOTE: This runs locally only. For Netlify deployment, use the generated static site.")
     
     # Check if Flask is installed
     install_flask()
@@ -32,6 +33,7 @@ def start_web_interface():
     print("🔗 Web Interface: http://localhost:5001")
     print("💡 Select categories → Start scraping → View results!")
     print("📑 All available B2B Vault categories will be loaded automatically")
+    print("🌐 After scraping, visit /generate_static_site to prepare for Netlify")
     print("=" * 50)
     
     # Give server time to start
