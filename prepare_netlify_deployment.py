@@ -76,16 +76,11 @@ def prepare_netlify_deployment():
         else:
             print("⚠️  No PDF files found in scraped_data directory")
     
-    # 3. Create ENHANCED static tag selector page with local storage
-    print("✅ Creating enhanced static tag selector...")
+    # 3. ENHANCED static tag selector page with advanced features
+    print("✅ Creating ENHANCED static tag selector...")
     
-    # Available tags (same as in interactive_server.py)
-    available_tags = [
-        "All", "Content Marketing", "Demand Generation", "ABM & GTM",
-        "Paid Marketing", "Marketing Ops", "Event Marketing", "AI",
-        "Product Marketing", "Sales", "General", "Affiliate & Partnerships",
-        "Copy & Positioning"
-    ]
+    # Get existing dashboard content for integration
+    dashboard_exists = os.path.exists(os.path.join(netlify_site_dir, "index.html"))
     
     scraper_html = f"""
 <!DOCTYPE html>
@@ -128,6 +123,16 @@ def prepare_netlify_deployment():
             font-size: 2.5rem;
         }}
         
+        .status-banner {{
+            background: {'#d4edda' if dashboard_exists else '#fff3cd'};
+            color: {'#155724' if dashboard_exists else '#856404'};
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+            border: 1px solid {'#c3e6cb' if dashboard_exists else '#ffeaa7'};
+        }}
+        
         .tabs {{
             display: flex;
             background: #f8f9fa;
@@ -164,6 +169,33 @@ def prepare_netlify_deployment():
             display: block;
         }}
         
+        .quick-actions {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        
+        .quick-action-card {{
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }}
+        
+        .quick-action-card:hover {{
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }}
+        
+        .quick-action-card.available {{
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }}
+        
         .info-box {{
             background: #e8f4f8;
             padding: 20px;
@@ -174,15 +206,6 @@ def prepare_netlify_deployment():
         .info-box h3 {{
             color: #2c3e50;
             margin-bottom: 15px;
-        }}
-        
-        .info-box ol {{
-            margin-left: 20px;
-            color: #555;
-        }}
-        
-        .info-box li {{
-            margin-bottom: 8px;
         }}
         
         .tags-grid {{
@@ -246,6 +269,8 @@ def prepare_netlify_deployment():
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }}
         
         .btn-primary {{
@@ -260,6 +285,11 @@ def prepare_netlify_deployment():
         
         .btn-secondary {{
             background: #95a5a6;
+            color: white;
+        }}
+        
+        .btn-success {{
+            background: #27ae60;
             color: white;
         }}
         
@@ -309,6 +339,10 @@ def prepare_netlify_deployment():
             background: #2980b9;
         }}
         
+        .nav-link.dashboard-available {{
+            background: #27ae60;
+        }}
+        
         .history-section {{
             background: #f8f9fa;
             padding: 20px;
@@ -325,15 +359,6 @@ def prepare_netlify_deployment():
             background: white;
             border-radius: 5px;
             border-left: 4px solid #667eea;
-        }}
-        
-        .history-item:hover {{
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }}
-        
-        .history-tags {{
-            color: #666;
-            font-size: 0.9rem;
         }}
         
         .btn-small {{
@@ -374,8 +399,14 @@ def prepare_netlify_deployment():
     <div class="container">
         <div class="header">
             <h1>🚀 B2B Vault Scraper</h1>
-            <p>Advanced tag selection and command generation for B2B Vault scraping</p>
+            <p>Enhanced tag selection and command generation for B2B Vault scraping</p>
         </div>
+        
+        <div class="status-banner">
+            {'✅ Dashboard Available! You can view your existing analysis while generating new commands.' if dashboard_exists else '📋 No dashboard yet - Use this tool to generate scraping commands and create your first analysis!'}
+        </div>
+        
+        {'<div class="quick-actions"><div class="quick-action-card available" onclick="window.open(\'./index.html\', \'_blank\')"><h3>📊 View Dashboard</h3><p>Browse your analyzed articles</p></div><div class="quick-action-card" onclick="switchTab(\'command\')"><h3>🎯 Generate Commands</h3><p>Create new scraping commands</p></div><div class="quick-action-card" onclick="switchTab(\'tutorial\')"><h3>📚 Tutorial</h3><p>Learn how to use the scraper</p></div></div>' if dashboard_exists else ''}
         
         <div class="tabs">
             <button class="tab active" onclick="switchTab('command')">📋 Generate Commands</button>
@@ -391,7 +422,7 @@ def prepare_netlify_deployment():
                     <li><strong>Select categories</strong> you want to scrape below</li>
                     <li><strong>Click "Generate Command"</strong> to get the Python command</li>
                     <li><strong>Copy and run</strong> the command locally on your machine</li>
-                    <li><strong>Upload results</strong> back to Netlify when scraping is complete</li>
+                    <li><strong>Re-deploy</strong> the updated files to Netlify when scraping is complete</li>
                 </ol>
             </div>
             
@@ -429,6 +460,14 @@ def prepare_netlify_deployment():
                 <p style="margin-top: 15px; color: #bdc3c7; font-size: 0.9rem;">
                     💡 Click the command to select it, then copy (Ctrl+C/Cmd+C)
                 </p>
+                <div style="margin-top: 15px; padding: 15px; background: #34495e; border-radius: 5px;">
+                    <h4 style="color: #ecf0f1; margin-bottom: 10px;">🔄 After running the command:</h4>
+                    <ol style="color: #bdc3c7; margin-left: 20px;">
+                        <li>Run: <code style="background: #2c3e50; padding: 2px 5px; border-radius: 3px;">python3 prepare_netlify_deployment.py</code></li>
+                        <li>Upload the updated <code>netlify_site</code> folder to Netlify</li>
+                        <li>Your dashboard will be updated with new content!</li>
+                    </ol>
+                </div>
             </div>
         </div>
         
@@ -468,7 +507,7 @@ def prepare_netlify_deployment():
                 <div class="step">
                     <div class="step-number">5</div>
                     <div>
-                        <strong>Deploy Results:</strong> Upload the generated files back to Netlify to update your live dashboard.
+                        <strong>Deploy Results:</strong> Run the deployment script and upload files to Netlify to update your live dashboard.
                     </div>
                 </div>
             </div>
@@ -481,6 +520,17 @@ def prepare_netlify_deployment():
                     <li>Required Python packages: <code>pip install playwright beautifulsoup4 requests tenacity weasyprint</code></li>
                     <li>Perplexity API key configured in the scraper</li>
                 </ul>
+                
+                <h3 style="margin-top: 20px;">📋 Quick Update Process:</h3>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px;">
+                    <ol style="margin-left: 20px; color: #555;">
+                        <li>Generate command using this tool</li>
+                        <li>Run the command locally: <code>python3 B2Bscraper.py --tags="Sales,Marketing"</code></li>
+                        <li>Run deployment script: <code>python3 prepare_netlify_deployment.py</code></li>
+                        <li>Upload <code>netlify_site</code> folder contents to Netlify</li>
+                        <li>Your dashboard will be updated!</li>
+                    </ol>
+                </div>
             </div>
         </div>
         
@@ -498,31 +548,26 @@ def prepare_netlify_deployment():
         </div>
         
         <div class="navigation">
-            <a href="./index.html" class="nav-link">📊 View Analysis Dashboard</a>
+            {f'<a href="./index.html" class="nav-link dashboard-available">📊 View Analysis Dashboard</a>' if dashboard_exists else ''}
             <a href="https://github.com/yourusername/B2BVaultScraper" class="nav-link" target="_blank">📚 Download Scraper</a>
+            <a href="#" class="nav-link" onclick="showUpdateInstructions()">🔄 Update Instructions</a>
         </div>
     </div>
 
     <script>
         // Tab switching functionality
         function switchTab(tabName) {{
-            // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(content => {{
                 content.classList.remove('active');
             }});
             
-            // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(tab => {{
                 tab.classList.remove('active');
             }});
             
-            // Show selected tab content
             document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Add active class to clicked tab
             event.target.classList.add('active');
             
-            // Load history when history tab is opened
             if (tabName === 'history') {{
                 loadHistory();
             }}
@@ -565,6 +610,16 @@ def prepare_netlify_deployment():
             selection.addRange(range);
         }}
         
+        function showUpdateInstructions() {{
+            alert(`🔄 To update your dashboard:
+
+1. Generate a command using this tool
+2. Run it locally: python3 B2Bscraper.py --tags="YourTags"
+3. Run: python3 prepare_netlify_deployment.py
+4. Upload netlify_site folder to Netlify
+5. Your dashboard will be updated!`);
+        }}
+        
         // Local storage functions for history
         function saveSelection() {{
             const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
@@ -581,20 +636,14 @@ def prepare_netlify_deployment():
                 date: new Date().toLocaleDateString()
             }};
             
-            // Get existing history
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
-            
-            // Add new selection to beginning
             history.unshift(selection);
             
-            // Keep only last 10 selections
             if (history.length > 10) {{
                 history.splice(10);
             }}
             
-            // Save back to localStorage
             localStorage.setItem('b2bVaultHistory', JSON.stringify(history));
-            
             alert('Selection saved to history!');
         }}
         
@@ -625,10 +674,8 @@ def prepare_netlify_deployment():
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             if (!history[index]) return;
             
-            // Clear current selections
             clearAll();
             
-            // Load saved selection
             const savedTags = history[index].tags;
             savedTags.forEach(tag => {{
                 const checkbox = document.querySelector(`input[value="${{tag}}"]`);
@@ -637,9 +684,7 @@ def prepare_netlify_deployment():
                 }}
             }});
             
-            // Switch to command tab
             switchTab('command');
-            
             alert('Selection loaded! You can now generate the command.');
         }}
         
@@ -657,59 +702,14 @@ def prepare_netlify_deployment():
             }}
         }}
         
-        // Load history on page load
         window.onload = function() {{
-            // Check if there's a saved selection in URL params
             const urlParams = new URLSearchParams(window.location.search);
             const tags = urlParams.get('tags');
             if (tags) {{
                 const tagList = tags.split(',');
                 tagList.forEach(tag => {{
                     const checkbox = document.querySelector(`input[value="${{tag.trim()}}"]`);
-                    if (checkbox) {{
-                        checkbox.checked = true;
-                    }}
-                }});
-                generateCommand();
-            }}
-        }};
-    </script>
-</body>
-</html>"""
-    
-    with open(os.path.join(netlify_site_dir, "scraper.html"), "w", encoding="utf-8") as f:
-        f.write(scraper_html)
-    
-    # 4. Create Netlify configuration files
-    print("✅ Creating Netlify configuration...")
-    
-    netlify_toml = """[build]
-  publish = "."
-
-[build.environment]
-  NODE_VERSION = "18"
-
-[[headers]]
-  for = "*.pdf"
-  [headers.values]
-    Content-Type = "application/pdf"
-    Cache-Control = "public, max-age=86400"
-    
-[[headers]]
-  for = "*.html"
-  [headers.values]
-    Content-Type = "text/html; charset=utf-8"
-    Cache-Control = "public, max-age=3600"
-
-[[redirects]]
-  from = "/scraper"
-  to = "/scraper.html"
-  status = 301
-
-[[redirects]]
-  from = "/dashboard"
-  to = "/index.html"
-  status = 301
+                    if
 """
     
     with open(os.path.join(netlify_site_dir, "netlify.toml"), "w") as f:
