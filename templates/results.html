@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B2B Vault Scraper - Results</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .result-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .tags-section {
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .tags-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .tag-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #219a52;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Scraping Results</h1>
+            <p>Your B2B Vault analysis has been completed successfully!</p>
+        </div>
+        
+        <div class="results-grid">
+            <div class="result-card">
+                <span class="result-number">{{ results.total_articles }}</span>
+                <div class="result-label">Total Articles Found</div>
+            </div>
+            <div class="result-card">
+                <span class="result-number">{{ results.processed_articles }}</span>
+                <div class="result-label">Articles Processed</div>
+            </div>
+            <div class="result-card">
+                <span class="result-number">{{ results.selected_tags|length }}</span>
+                <div class="result-label">Tags Scraped</div>
+            </div>
+        </div>
+        
+        <div class="tags-section">
+            <h3>📑 Scraped Tags:</h3>
+            {% for tag in results.selected_tags %}
+            <span class="tag-badge">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        
+        <div class="actions">
+            {% if results.website_path %}
+            <a href="http://localhost:8000" target="_blank" class="btn btn-primary">
+                🌐 View Website Dashboard
+            </a>
+            {% endif %}
+            
+            {% if results.pdf_path %}
+            <a href="{{ url_for('static', filename='../scraped_data/' + results.pdf_path.split('/')[-1]) }}" 
+               target="_blank" class="btn btn-success">
+                📄 Download PDF Report
+            </a>
+            {% endif %}
+            
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                🔄 Scrape More Tags
+            </a>
+        </div>
+        
+        <script>
+            // Auto-start the website server when viewing results
+            window.onload = function() {
+                // Start the website server in the background
+                fetch('/view_website')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Website server started successfully');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting website server:', error);
+                });
+            };
+        </script>
+    </div>
+</body>
+</html>

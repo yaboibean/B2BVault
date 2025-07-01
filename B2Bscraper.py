@@ -1470,31 +1470,40 @@ def start_scheduler():
         print("Scheduler stopped.")
 
 if __name__ == "__main__":
-    # Optimized settings for speed
-    tabs_to_search = ["Sales"]
-    agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=5)  # Reduced workers for stability
+    import sys
     
-    # Option 1: Just start the website server for existing data
-    # agent.start_website_server(preview=True)
-    
-    # Option 2: Enable debug mode
-    # agent.debug_card_structure(preview=True)
-    
-    # Option 3: Run full comprehensive analysis
-    result = agent.run_comprehensive_analysis(preview=True)
-    
-    if result:
-        print(f"✅ Comprehensive analysis complete!")
-        print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
-        if result['pdf_path']:
-            print(f"📄 PDF saved to: {result['pdf_path']}")
-        if result['website_path']:
-            print(f"🌐 Website: {result['website_path']}")
+    # Check if running from web interface
+    if len(sys.argv) > 1 and sys.argv[1] == '--web':
+        print("🌐 Starting B2B Vault Scraper Web Interface...")
+        print("📱 Open your browser to: http://localhost:5000")
+        from web_interface import app
+        app.run(host='127.0.0.1', port=5000, debug=False)
     else:
-        print("❌ Analysis failed. Check logs for details.")
-        print(f"💡 Log file location: {agent.output_dir}/agent.log")
-        print("💡 Try running debug mode to see what's happening:")
-        print("   Uncomment the debug line in the script and run again")
+        # Original command line interface
+        tabs_to_search = ["Sales"]
+        agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=5)
+        
+        # Option 1: Just start the website server for existing data
+        # agent.start_website_server(preview=True)
+        
+        # Option 2: Enable debug mode
+        # agent.debug_card_structure(preview=True)
+        
+        # Option 3: Run full comprehensive analysis
+        result = agent.run_comprehensive_analysis(preview=True)
+        
+        if result:
+            print(f"✅ Comprehensive analysis complete!")
+            print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
+            if result['pdf_path']:
+                print(f"📄 PDF saved to: {result['pdf_path']}")
+            if result['website_path']:
+                print(f"🌐 Website: {result['website_path']}")
+        else:
+            print("❌ Analysis failed. Check logs for details.")
+            print(f"💡 Log file location: {agent.output_dir}/agent.log")
+            print("💡 Try running debug mode to see what's happening:")
+            print("   Uncomment the debug line in the script and run again")
     
     # Uncomment the next line if you want to start the scheduler after the analysis
     # start_scheduler()
