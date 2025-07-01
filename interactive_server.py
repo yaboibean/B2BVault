@@ -851,6 +851,10 @@ def view_results():
                 🌐 View Website Dashboard
             </a>
             
+            <a href="/generate_netlify_site" class="btn btn-success">
+                📤 Generate Netlify Site
+            </a>
+            
             <a href="/" class="btn btn-secondary">
                 🔄 Scrape More Categories
             </a>
@@ -879,6 +883,31 @@ def view_results():
 </html>
     """
     return render_template_string(results_template, results=scraping_status['results'])
+
+@app.route('/generate_netlify_site')
+def generate_netlify_site():
+    """Generate an enhanced Netlify-ready static site"""
+    try:
+        import subprocess
+        import sys
+        
+        # Run the enhanced Netlify deployment script
+        result = subprocess.run([sys.executable, 'prepare_netlify_deployment.py'], 
+                              capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True, 
+                'message': 'Enhanced Netlify site generated successfully!',
+                'output': result.stdout
+            })
+        else:
+            return jsonify({
+                'error': f'Failed to generate Netlify site: {result.stderr}'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/start_website_server')
 def start_website_server():

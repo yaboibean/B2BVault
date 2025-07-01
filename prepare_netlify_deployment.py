@@ -76,8 +76,8 @@ def prepare_netlify_deployment():
         else:
             print("⚠️  No PDF files found in scraped_data directory")
     
-    # 3. Create static tag selector page
-    print("✅ Creating static tag selector...")
+    # 3. Create ENHANCED static tag selector page with local storage
+    print("✅ Creating enhanced static tag selector...")
     
     # Available tags (same as in interactive_server.py)
     available_tags = [
@@ -93,7 +93,7 @@ def prepare_netlify_deployment():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Vault Scraper - Tag Selection</title>
+    <title>B2B Vault Scraper - Enhanced Tag Selection</title>
     <style>
         * {{
             margin: 0;
@@ -109,7 +109,7 @@ def prepare_netlify_deployment():
         }}
         
         .container {{
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -126,6 +126,42 @@ def prepare_netlify_deployment():
             color: #2c3e50;
             margin-bottom: 10px;
             font-size: 2.5rem;
+        }}
+        
+        .tabs {{
+            display: flex;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }}
+        
+        .tab {{
+            flex: 1;
+            padding: 15px 20px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: none;
+            background: transparent;
+            font-weight: 500;
+        }}
+        
+        .tab.active {{
+            background: #667eea;
+            color: white;
+        }}
+        
+        .tab:hover:not(.active) {{
+            background: #e9ecef;
+        }}
+        
+        .tab-content {{
+            display: none;
+        }}
+        
+        .tab-content.active {{
+            display: block;
         }}
         
         .info-box {{
@@ -272,62 +308,193 @@ def prepare_netlify_deployment():
         .nav-link:hover {{
             background: #2980b9;
         }}
+        
+        .history-section {{
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }}
+        
+        .history-item {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }}
+        
+        .history-item:hover {{
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }}
+        
+        .history-tags {{
+            color: #666;
+            font-size: 0.9rem;
+        }}
+        
+        .btn-small {{
+            padding: 5px 15px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }}
+        
+        .tutorial-section {{
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }}
+        
+        .step {{
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }}
+        
+        .step-number {{
+            background: #ffc107;
+            color: #212529;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🚀 B2B Vault Scraper</h1>
-            <p>Generate scraping commands for local execution</p>
+            <p>Advanced tag selection and command generation for B2B Vault scraping</p>
         </div>
         
-        <div class="info-box">
-            <h3>📋 How to Use (Static Version):</h3>
-            <ol>
-                <li><strong>Select categories</strong> you want to scrape below</li>
-                <li><strong>Click "Generate Command"</strong> to get the Python command</li>
-                <li><strong>Copy and run</strong> the command locally on your machine</li>
-                <li><strong>Upload results</strong> back to Netlify when scraping is complete</li>
-            </ol>
-            <p style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; color: #856404;">
-                <strong>Note:</strong> This static version generates commands for local execution. 
-                The interactive scraper requires a server environment.
-            </p>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('command')">📋 Generate Commands</button>
+            <button class="tab" onclick="switchTab('tutorial')">📚 How to Use</button>
+            <button class="tab" onclick="switchTab('history')">📜 Selection History</button>
         </div>
         
-        <div class="tag-selection">
-            <h2>📑 Select Categories to Scrape:</h2>
-            <div class="tags-grid">"""
+        <!-- Command Generation Tab -->
+        <div id="command-tab" class="tab-content active">
+            <div class="info-box">
+                <h3>📋 Smart Command Generation:</h3>
+                <ol>
+                    <li><strong>Select categories</strong> you want to scrape below</li>
+                    <li><strong>Click "Generate Command"</strong> to get the Python command</li>
+                    <li><strong>Copy and run</strong> the command locally on your machine</li>
+                    <li><strong>Upload results</strong> back to Netlify when scraping is complete</li>
+                </ol>
+            </div>
+            
+            <div class="tag-selection">
+                <h2>📑 Select Categories to Scrape:</h2>
+                <div class="tags-grid">"""
     
     # Add tag checkboxes
     for i, tag in enumerate(available_tags):
         tag_class = "all-tag" if tag == "All" else ""
         scraper_html += f"""
-                <div>
-                    <input type="checkbox" id="tag-{i}" class="tag-checkbox" value="{tag}">
-                    <label for="tag-{i}" class="tag-label {tag_class}">
-                        {"🌟 " + tag if tag == "All" else tag}
-                    </label>
-                </div>"""
+                    <div>
+                        <input type="checkbox" id="tag-{i}" class="tag-checkbox" value="{tag}">
+                        <label for="tag-{i}" class="tag-label {tag_class}">
+                            {"🌟 " + tag if tag == "All" else tag}
+                        </label>
+                    </div>"""
     
     scraper_html += f"""
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn btn-secondary" onclick="selectAll()">Select All Categories</button>
+                <button class="btn btn-secondary" onclick="clearAll()">Clear Selection</button>
+                <button class="btn btn-primary" onclick="generateCommand()">Generate Scraping Command</button>
+                <button class="btn btn-secondary" onclick="saveSelection()">💾 Save Selection</button>
+            </div>
+            
+            <div class="command-output" id="commandOutput">
+                <h3>📋 Copy and run this command locally:</h3>
+                <div class="command-text" id="commandText" onclick="selectText(this)">
+                    Click "Generate Command" first
+                </div>
+                <p style="margin-top: 15px; color: #bdc3c7; font-size: 0.9rem;">
+                    💡 Click the command to select it, then copy (Ctrl+C/Cmd+C)
+                </p>
             </div>
         </div>
         
-        <div class="controls">
-            <button class="btn btn-secondary" onclick="selectAll()">Select All Categories</button>
-            <button class="btn btn-secondary" onclick="clearAll()">Clear Selection</button>
-            <button class="btn btn-primary" onclick="generateCommand()">Generate Scraping Command</button>
+        <!-- Tutorial Tab -->
+        <div id="tutorial-tab" class="tab-content">
+            <div class="tutorial-section">
+                <h3>🎯 Complete Workflow Guide</h3>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <strong>Download the Scraper:</strong> Get the B2B Vault Scraper from GitHub and install dependencies locally.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <strong>Select Categories:</strong> Use this page to choose which B2B Vault categories you want to analyze.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <strong>Generate Command:</strong> Click "Generate Command" to get a custom Python command for your selections.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div>
+                        <strong>Run Locally:</strong> Execute the command on your local machine to scrape and analyze articles.
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div>
+                        <strong>Deploy Results:</strong> Upload the generated files back to Netlify to update your live dashboard.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>🔧 Prerequisites:</h3>
+                <ul style="margin-left: 20px; color: #555;">
+                    <li>Python 3.7+ installed on your local machine</li>
+                    <li>B2B Vault Scraper downloaded from GitHub</li>
+                    <li>Required Python packages: <code>pip install playwright beautifulsoup4 requests tenacity weasyprint</code></li>
+                    <li>Perplexity API key configured in the scraper</li>
+                </ul>
+            </div>
         </div>
         
-        <div class="command-output" id="commandOutput">
-            <h3>📋 Copy and run this command locally:</h3>
-            <div class="command-text" id="commandText" onclick="selectText(this)">
-                Click "Generate Command" first
+        <!-- History Tab -->
+        <div id="history-tab" class="tab-content">
+            <div class="history-section">
+                <h3>📜 Previous Tag Selections</h3>
+                <div id="historyList">
+                    <p style="color: #666; text-align: center; padding: 20px;">No previous selections saved</p>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button class="btn btn-secondary btn-small" onclick="clearHistory()">🗑️ Clear History</button>
+                </div>
             </div>
-            <p style="margin-top: 15px; color: #bdc3c7; font-size: 0.9rem;">
-                💡 Click the command to select it, then copy (Ctrl+C/Cmd+C)
-            </p>
         </div>
         
         <div class="navigation">
@@ -337,6 +504,31 @@ def prepare_netlify_deployment():
     </div>
 
     <script>
+        // Tab switching functionality
+        function switchTab(tabName) {{
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {{
+                content.classList.remove('active');
+            }});
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {{
+                tab.classList.remove('active');
+            }});
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Load history when history tab is opened
+            if (tabName === 'history') {{
+                loadHistory();
+            }}
+        }}
+        
+        // Tag selection functions
         function selectAll() {{
             const allCheckbox = document.querySelector('input[value="All"]');
             if (allCheckbox) {{
@@ -372,6 +564,115 @@ def prepare_netlify_deployment():
             selection.removeAllRanges();
             selection.addRange(range);
         }}
+        
+        // Local storage functions for history
+        function saveSelection() {{
+            const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedTags.length === 0) {{
+                alert('Please select at least one category to save');
+                return;
+            }}
+            
+            const selection = {{
+                tags: selectedTags,
+                timestamp: new Date().toISOString(),
+                date: new Date().toLocaleDateString()
+            }};
+            
+            // Get existing history
+            const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
+            
+            // Add new selection to beginning
+            history.unshift(selection);
+            
+            // Keep only last 10 selections
+            if (history.length > 10) {{
+                history.splice(10);
+            }}
+            
+            // Save back to localStorage
+            localStorage.setItem('b2bVaultHistory', JSON.stringify(history));
+            
+            alert('Selection saved to history!');
+        }}
+        
+        function loadHistory() {{
+            const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
+            const historyList = document.getElementById('historyList');
+            
+            if (history.length === 0) {{
+                historyList.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No previous selections saved</p>';
+                return;
+            }}
+            
+            historyList.innerHTML = history.map((item, index) => `
+                <div class="history-item">
+                    <div>
+                        <strong>${{item.date}}</strong>
+                        <div class="history-tags">${{item.tags.join(', ')}}</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary btn-small" onclick="loadSelection(${{index}})">🔄 Load</button>
+                        <button class="btn btn-primary btn-small" onclick="generateFromHistory(${{index}})">▶️ Generate</button>
+                    </div>
+                </div>
+            `).join('');
+        }}
+        
+        function loadSelection(index) {{
+            const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
+            if (!history[index]) return;
+            
+            // Clear current selections
+            clearAll();
+            
+            // Load saved selection
+            const savedTags = history[index].tags;
+            savedTags.forEach(tag => {{
+                const checkbox = document.querySelector(`input[value="${{tag}}"]`);
+                if (checkbox) {{
+                    checkbox.checked = true;
+                }}
+            }});
+            
+            // Switch to command tab
+            switchTab('command');
+            
+            alert('Selection loaded! You can now generate the command.');
+        }}
+        
+        function generateFromHistory(index) {{
+            loadSelection(index);
+            setTimeout(() => {{
+                generateCommand();
+            }}, 100);
+        }}
+        
+        function clearHistory() {{
+            if (confirm('Are you sure you want to clear all saved selections?')) {{
+                localStorage.removeItem('b2bVaultHistory');
+                loadHistory();
+            }}
+        }}
+        
+        // Load history on page load
+        window.onload = function() {{
+            // Check if there's a saved selection in URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const tags = urlParams.get('tags');
+            if (tags) {{
+                const tagList = tags.split(',');
+                tagList.forEach(tag => {{
+                    const checkbox = document.querySelector(`input[value="${{tag.trim()}}"]`);
+                    if (checkbox) {{
+                        checkbox.checked = true;
+                    }}
+                }});
+                generateCommand();
+            }}
+        }};
     </script>
 </body>
 </html>"""
