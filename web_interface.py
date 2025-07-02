@@ -319,7 +319,7 @@ def process_articles_and_generate_outputs(agent, all_articles, tags_used):
     web_logger.add_message("You can now filter and search through all articles on the website!")
 
 def run_comprehensive_scraping():
-    """Run comprehensive scraping of ALL B2B Vault articles"""
+    """Run comprehensive scraping of ALL B2B Vault articles from homepage"""
     global scraping_status, web_logger
     
     try:
@@ -331,23 +331,23 @@ def run_comprehensive_scraping():
         web_logger.messages = []
         
         web_logger.add_message("🚀 Starting comprehensive B2B Vault scraping")
-        web_logger.add_message("📊 Will collect ALL articles from ALL categories")
+        web_logger.add_message("📊 Will collect ALL articles from homepage")
         
-        # Initialize agent for comprehensive scraping - no tabs specified = ALL tabs
+        # Initialize agent for comprehensive scraping
         agent = B2BVaultAgent(max_workers=5)
         
-        # Step 1: Collect ALL articles
-        scraping_status['current_step'] = 'Discovering and collecting ALL articles...'
+        # Step 1: Collect ALL articles from homepage
+        scraping_status['current_step'] = 'Discovering and collecting ALL articles from homepage...'
         scraping_status['progress'] = 10
-        web_logger.add_message(f"📂 Scanning {len(agent.tabs_to_search)} categories...")
+        web_logger.add_message("📂 Scanning homepage for all articles...")
         
-        all_articles = agent.scrape_all_articles(preview=False)
+        all_articles = agent.scrape_all_articles_from_homepage(preview=False)
         
         if not all_articles:
-            raise Exception("No articles found across all categories")
+            raise Exception("No articles found on homepage")
         
-        web_logger.add_message(f"✅ Collected {len(all_articles)} total articles")
-        web_logger.add_message(f"📂 From {len(set(a['tab'] for a in all_articles))} categories")
+        web_logger.add_message(f"✅ Collected {len(all_articles)} total articles from homepage")
+        web_logger.add_message(f"📂 Found articles from {len(set(a['tab'] for a in all_articles))} categories")
         web_logger.add_message(f"📰 From {len(set(a['publisher'] for a in all_articles))} publishers")
         
         # Step 2: Process ALL articles
@@ -372,8 +372,8 @@ def run_comprehensive_scraping():
         scraping_status['current_step'] = 'Building advanced website with filtering...'
         scraping_status['progress'] = 90
         
-        website_path = agent.generate_advanced_website(processed_articles, pdf_path, preview=False)
-        web_logger.add_message(f"🌐 Generated advanced website with filtering")
+        website_path = agent.generate_website(processed_articles, pdf_path, preview=False)
+        web_logger.add_message(f"🌐 Generated website with all homepage articles")
         
         # Complete
         scraping_status['current_step'] = 'Complete!'
@@ -388,8 +388,8 @@ def run_comprehensive_scraping():
             'articles_by_category': {cat: len([a for a in all_articles if a['tab'] == cat]) 
                                    for cat in set(a['tab'] for a in all_articles)}
         }
-        web_logger.add_message("🎉 Comprehensive scraping completed successfully!")
-        web_logger.add_message(f"📊 Final stats: {len(processed_articles)} articles processed")
+        web_logger.add_message("🎉 Comprehensive homepage scraping completed successfully!")
+        web_logger.add_message(f"📊 Final stats: {len(processed_articles)} articles processed from homepage")
         
     except Exception as e:
         scraping_status['error'] = str(e)
