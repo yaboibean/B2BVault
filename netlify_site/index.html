@@ -326,22 +326,14 @@
             showError('⚠️ Static site detected. To actually run scraping:<br>1. Run "python3 web_interface.py" locally<br>2. Visit http://localhost:5000<br>3. Use the Flask interface for live scraping');
         }
         
-        // Check if scraping is already running on page load
-        window.onload = function() {
+        function pollStatus() {
             fetch('/status')
             .then(response => response.json())
             .then(data => {
-                if (data.is_running) {
-                    document.getElementById('startBtn').disabled = true;
-                    document.getElementById('progressContainer').style.display = 'block';
-                    document.getElementById('logContainer').style.display = 'block';
-                    pollingInterval = setInterval(pollStatus, 1000);
-                }
-            });
-        };
-    </script>
-</body>
-</html>
+                updateProgress(data.progress, data.current_step);
+                
+                if (data.log_messages) {
+                    updateLogs(data.log_messages);
                 }
                 
                 if (data.error) {
@@ -365,6 +357,14 @@
             });
         }
         
+        // Check if scraping is already running on page load
+        window.onload = function() {
+            // Show static site message
+            showError('📄 This is a static demo. For live scraping, run "python3 web_interface.py" locally and visit http://localhost:5000');
+        };
+    </script>
+</body>
+</html>
         // Check if scraping is already running on page load
         window.onload = function() {
             fetch('/status')
