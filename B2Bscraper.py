@@ -1329,13 +1329,13 @@ if __name__ == "__main__":
                 input("Press Enter to close browser...")  # Wait for user
                 browser.close()
 
-    def scrape_all_articles_from_homepage(self, preview: bool = False):
-        """Scrape ALL articles directly from the B2B Vault homepage."""
+    def scrape_all_articles_from_homepage(self, preview: bool = False, max_articles: int = 100):
+        """Scrape articles from the B2B Vault homepage and randomly select a subset."""
         if preview:
-            print("🌐 Starting comprehensive B2B Vault homepage scraping...")
-            print("📄 Will collect ALL 'Read Full Article' links from homepage")
+            print("🌐 Starting B2B Vault homepage scraping...")
+            print(f"📄 Will collect article links and randomly select {max_articles} for processing")
         
-        self.logger.info("Starting homepage scraping process")
+        self.logger.info(f"Starting homepage scraping process (max {max_articles} articles)")
         all_articles = []
         seen_urls = set()
         
@@ -1361,19 +1361,19 @@ if __name__ == "__main__":
                 if preview:
                     print(f"📊 Found {initial_count} articles initially loaded")
                 
-                # Aggressive scrolling to load ALL content on homepage
+                # Light scrolling to load some dynamic content (not aggressive)
                 if preview:
-                    print("📜 Aggressive scrolling to load ALL articles on homepage...")
+                    print("📜 Light scrolling to load additional articles...")
                 
-                self.logger.info("Starting aggressive scroll to load dynamic content")
+                self.logger.info("Starting light scroll to load some dynamic content")
                 previous_count = 0
                 scroll_attempts = 0
-                max_scroll_attempts = 5
+                max_scroll_attempts = 3  # Reduced from 5 to 3
                 
                 while scroll_attempts < max_scroll_attempts:
                     # Scroll to bottom
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    page.wait_for_timeout(3000)
+                    page.wait_for_timeout(2000)  # Reduced wait time
                     
                     # Check if more content loaded by counting article cards
                     current_count = page.locator("div.w-dyn-item").count()
@@ -1453,31 +1453,39 @@ if __name__ == "__main__":
                                     }
                                     all_articles.append(article_data)
                                     
-                                    self.logger.info(f"Added article {len(all_articles)}: '{title}' from {publisher}")
-                                    
-                                    if preview and len(all_articles) <= 20:
-                                        print(f"   📰 Article {len(all_articles)}: {title[:50]}...")
+                                    self.logger.debug(f"Added article {len(all_articles)}: '{title}' from {publisher}")
                                     
                             except Exception as e:
                                 self.logger.error(f"Error processing button {i}: {e}")
-                                if preview:
-                                    print(f"   ⚠️ Error processing button {i}: {e}")
                                 continue
                                 
                     except Exception as e:
                         self.logger.error(f"Error with selector {selector}: {e}")
-                        if preview:
-                            print(f"   ❌ Error with selector {selector}: {e}")
                         continue
                 
                 self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles from {len(seen_urls)} URLs")
                 
+                # Randomly select articles if we have more than max_articles
+                if len(all_articles) > max_articles:
+                    import random
+                    random.shuffle(all_articles)
+                    selected_articles = all_articles[:max_articles]
+                    self.logger.info(f"Randomly selected {max_articles} articles from {len(all_articles)} total articles")
+                    if preview:
+                        print(f"🎲 Randomly selected {max_articles} articles from {len(all_articles)} total articles")
+                        print(f"📊 This ensures faster processing and prevents memory issues")
+                else:
+                    selected_articles = all_articles
+                    self.logger.info(f"Using all {len(all_articles)} articles (less than {max_articles} limit)")
+                    if preview:
+                        print(f"📊 Using all {len(all_articles)} articles (less than {max_articles} limit)")
+                
                 if preview:
                     print(f"\n🎯 Homepage Scraping Summary:")
-                    print(f"   📊 Total unique articles found: {len(all_articles)}")
-                    print(f"   🔗 Total unique URLs: {len(seen_urls)}")
-                    print(f"   📂 Categories represented: {len(set(a['tab'] for a in all_articles))}")
-                    print(f"   📰 Publishers found: {len(set(a['publisher'] for a in all_articles))}")
+                    print(f"   📊 Total articles discovered: {len(all_articles)}")
+                    print(f"   🎲 Articles selected for processing: {len(selected_articles)}")
+                    print(f"   📂 Categories represented: {len(set(a['tab'] for a in selected_articles))}")
+                    print(f"   📰 Publishers found: {len(set(a['publisher'] for a in selected_articles))}")
                 
             except Exception as e:
                 self.logger.error(f"Critical error during homepage scraping: {e}")
@@ -1488,29 +1496,29 @@ if __name__ == "__main__":
                 browser.close()
                 self.logger.info("Browser closed successfully")
         
-        return all_articles
+        return selected_articles
 
-    def run_comprehensive_analysis(self, preview: bool = False):
-        """Run comprehensive analysis by scraping all articles from homepage."""
+    def run_comprehensive_analysis(self, preview: bool = False, max_articles: int = 100):
+        """Run comprehensive analysis by scraping random articles from homepage."""
         try:
             start_time = time.time()
             self.logger.info("=" * 70)
-            self.logger.info("STARTING COMPREHENSIVE B2B VAULT ANALYSIS")
+            self.logger.info(f"STARTING B2B VAULT ANALYSIS ({max_articles} RANDOM ARTICLES)")
             self.logger.info("=" * 70)
             
             if preview:
                 print("\n" + "="*70)
-                print("🚀 B2B VAULT COMPREHENSIVE HOMEPAGE SCRAPING STARTING")
-                print("📄 Will scrape ALL articles from homepage")
+                print(f"🚀 B2B VAULT SMART SCRAPING ({max_articles} RANDOM ARTICLES)")
+                print("📄 Will randomly select articles for faster processing")
                 print(f"⚡ Max parallel workers: {self.max_workers}")
                 print("="*70)
             
-            # Step 1: Collect ALL articles from homepage
+            # Step 1: Collect random articles from homepage
             self.logger.info("STEP 1: Article Collection Phase")
             if preview:
-                print(f"\n📑 STEP 1: Collecting ALL articles from homepage...")
+                print(f"\n📑 STEP 1: Collecting {max_articles} random articles from homepage...")
             
-            all_articles = self.scrape_all_articles_from_homepage(preview)
+            all_articles = self.scrape_all_articles_from_homepage(preview, max_articles=max_articles)
             
             if not all_articles:
                 self.logger.error("No articles found on homepage - analysis cannot continue")
@@ -1519,10 +1527,10 @@ if __name__ == "__main__":
                     print("💡 Check if B2B Vault website structure has changed")
                 return None
             
-            self.logger.info(f"Article collection complete: {len(all_articles)} articles found")
+            self.logger.info(f"Article collection complete: {len(all_articles)} articles selected")
             
             if preview:
-                print(f"\n📊 TOTAL UNIQUE ARTICLES FOUND: {len(all_articles)}")
+                print(f"\n📊 SELECTED ARTICLES FOR PROCESSING: {len(all_articles)}")
                 print("-" * 50)
                 categories = set(a['tab'] for a in all_articles)
                 publishers = set(a['publisher'] for a in all_articles)
@@ -1534,10 +1542,10 @@ if __name__ == "__main__":
                 if len(all_articles) > 10:
                     print(f"  ... and {len(all_articles) - 10} more articles")
             
-            # Step 2: Process all articles
+            # Step 2: Process selected articles
             self.logger.info("STEP 2: Article Processing Phase")
             if preview:
-                print(f"\n🔄 STEP 2: Processing All Articles with AI")
+                print(f"\n🔄 STEP 2: Processing {len(all_articles)} Selected Articles with AI")
                 print("-" * 50)
             
             processed_articles = []
@@ -1566,7 +1574,7 @@ if __name__ == "__main__":
                 
                 # Fallback to sequential processing with fewer articles
                 try:
-                    fallback_articles = all_articles[:5]
+                    fallback_articles = all_articles[:10]  # Process only first 10 in fallback
                     self.logger.info(f"Sequential fallback processing {len(fallback_articles)} articles")
                     if preview:
                         print(f"🔄 Sequential fallback processing {len(fallback_articles)} articles...")
@@ -1631,16 +1639,16 @@ if __name__ == "__main__":
             
             # Final summary
             self.logger.info("=" * 70)
-            self.logger.info("COMPREHENSIVE ANALYSIS COMPLETED SUCCESSFULLY")
-            self.logger.info(f"Total articles processed: {len(processed_articles)}")
+            self.logger.info("SMART ANALYSIS COMPLETED SUCCESSFULLY")
+            self.logger.info(f"Total articles processed: {len(processed_articles)} (randomly selected)")
             self.logger.info(f"Total time: {total_time:.1f} seconds")
             self.logger.info(f"Processing speed: {len(processed_articles)/total_time:.2f} articles/second")
             self.logger.info("=" * 70)
             
             if preview:
-                print(f"\n✅ COMPREHENSIVE ANALYSIS COMPLETED!")
+                print(f"\n✅ SMART ANALYSIS COMPLETED!")
                 print("="*70)
-                print(f"📰 Total Articles Found: {len(all_articles)}")
+                print(f"🎲 Articles Selected: {len(all_articles)} (randomly sampled)")
                 print(f"🤖 Articles Processed: {len(processed_articles)}")
                 print(f"📂 Categories: {len(set(a['tab'] for a in all_articles))}")
                 print(f"📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
@@ -1696,9 +1704,9 @@ def start_scheduler():
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='B2B Vault Comprehensive Scraper - Scrapes ALL articles from homepage')
+    parser = argparse.ArgumentParser(description='B2B Vault Smart Scraper - Processes 100 random articles')
     parser.add_argument('--preview', action='store_true', help='Show detailed preview output')
-    parser.add_argument('--limit', type=int, default=None, help='Limit number of articles to process (for testing)')
+    parser.add_argument('--limit', type=int, default=100, help='Number of random articles to process (default: 100)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     args = parser.parse_args()
     
@@ -1707,23 +1715,21 @@ if __name__ == "__main__":
         logging.getLogger().setLevel(logging.DEBUG)
         print("🔍 Verbose logging enabled")
     
-    print("🚀 Starting COMPREHENSIVE B2B Vault homepage scraping")
-    print("📊 This will scrape every available article from the B2B Vault homepage")
+    print("🚀 Starting SMART B2B Vault scraping")
+    print(f"🎲 Will randomly select {args.limit} articles for processing")
     print(f"⚙️  Preview mode: {'ON' if args.preview else 'OFF'}")
     print(f"⚙️  Verbose logging: {'ON' if args.verbose else 'OFF'}")
-    if args.limit:
-        print(f"⚙️  Processing limit: {args.limit} articles")
     print("-" * 50)
     
-    # Initialize agent for comprehensive homepage scraping
-    agent = B2BVaultAgent(max_workers=5)
+    # Initialize agent for smart scraping with reduced workers for stability
+    agent = B2BVaultAgent(max_workers=2)  # Further reduced for stability
     
-    # Run comprehensive analysis
-    result = agent.run_comprehensive_analysis(preview=args.preview)
+    # Run smart analysis
+    result = agent.run_comprehensive_analysis(preview=args.preview, max_articles=args.limit)
     
     if result:
-        print(f"\n🎉 SUCCESS! Comprehensive analysis complete!")
-        print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
+        print(f"\n🎉 SUCCESS! Smart analysis complete!")
+        print(f"🎲 {result['processed_articles']}/{result['total_articles']} randomly selected articles processed")
         print(f"⏱️  Completed in {result['total_time']:.1f} seconds")
         if result['pdf_path']:
             print(f"📄 PDF saved to: {result['pdf_path']}")
