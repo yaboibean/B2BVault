@@ -853,6 +853,570 @@ class B2BVaultAgent:
         
         return html_path
 
+    def generate_advanced_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
+        """Generate an advanced website with powerful filtering and search capabilities."""
+        self.logger.info("Generating advanced website with filtering")
+        if preview:
+            print("🌐 Generating advanced website with filtering...")
+        
+        # Create website directory
+        website_dir = os.path.join(self.output_dir, "website")
+        os.makedirs(website_dir, exist_ok=True)
+        
+        # Get unique values for filters
+        categories = sorted(set(a.get('tab', 'Unknown') for a in processed_articles))
+        publishers = sorted(set(a.get('publisher', 'Unknown Publisher') for a in processed_articles))
+        
+        # Generate article cards HTML with enhanced data attributes
+        articles_html = ""
+        for i, article in enumerate(processed_articles):
+            summary_preview = article['summary'][:300] + "..." if len(article['summary']) > 300 else article['summary']
+            word_count = len(article['summary'].split())
+            publisher = article.get('publisher', 'Unknown Publisher')
+            
+            articles_html += f"""
+            <div class="article-card" id="article-{i}" 
+                 data-category="{article['tab']}" 
+                 data-publisher="{publisher}"
+                 data-date="{article['scraped_at']}"
+                 data-words="{word_count}">
+                <div class="article-header">
+                    <h2 class="article-title">{article['title']}</h2>
+                    <div class="article-meta">
+                        <span class="tab-badge">{article['tab']}</span>
+                        <span class="publisher">📰 {publisher}</span>
+                        <span class="date">📅 {article['scraped_at']}</span>
+                        <span class="word-count">📝 {word_count} words</span>
+                    </div>
+                </div>
+                <div class="article-preview">
+                    <p>{summary_preview}</p>
+                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Analysis</button>
+                </div>
+                <div class="article-full" id="full-{i}" style="display: none;">
+                    <div class="summary-content">
+                        {article['summary'].replace(chr(10), '<br>')}
+                    </div>
+                    <div class="article-actions">
+                        <a href="{article['url']}" target="_blank" class="source-link">🔗 View Original Article</a>
+                        <button class="copy-btn" onclick="copyToClipboard({i})">📋 Copy Analysis</button>
+                    </div>
+                </div>
+            </div>
+            """
+        
+        # PDF download link
+        pdf_link = ""
+        if pdf_path and os.path.exists(pdf_path):
+            pdf_filename = os.path.basename(pdf_path)
+            import shutil
+            pdf_dest = os.path.join(website_dir, pdf_filename)
+            shutil.copy2(pdf_path, pdf_dest)
+            pdf_link = f'<a href="{pdf_filename}" class="btn btn-download" download>📄 Download PDF Report</a>'
+        
+        # Generate advanced HTML with powerful filtering
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>B2B Vault Intelligence Hub - {len(processed_articles)} Articles</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: #f8fafc;
+                    line-height: 1.6;
+                }}
+                
+                .header {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 40px 20px;
+                    text-align: center;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                }}
+                
+                .header h1 {{ 
+                    font-size: 3rem; 
+                    margin-bottom: 10px; 
+                    font-weight: 700;
+                }}
+                
+                .header p {{ 
+                    font-size: 1.2rem; 
+                    opacity: 0.9; 
+                    max-width: 600px;
+                    margin: 0 auto;
+                }}
+                
+                .container {{ 
+                    max-width: 1400px; 
+                    margin: 0 auto; 
+                    padding: 20px; 
+                }}
+                
+                .stats-dashboard {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 20px;
+                    margin: 30px 0;
+                }}
+                
+                .stat-card {{
+                    background: white;
+                    padding: 25px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                    text-align: center;
+                    border: 1px solid #e2e8f0;
+                }}
+                
+                .stat-number {{
+                    font-size: 2.5rem;
+                    font-weight: bold;
+                    color: #667eea;
+                    display: block;
+                }}
+                
+                .stat-label {{
+                    color: #64748b;
+                    font-size: 0.9rem;
+                    margin-top: 5px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                
+                .controls-panel {{
+                    background: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                    border: 1px solid #e2e8f0;
+                }}
+                
+                .search-section {{
+                    margin-bottom: 25px;
+                }}
+                
+                .search-input {{
+                    width: 100%;
+                    padding: 15px 20px;
+                    font-size: 16px;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 10px;
+                    transition: border-color 0.3s;
+                }}
+                
+                .search-input:focus {{
+                    outline: none;
+                    border-color: #667eea;
+                }}
+                
+                .filters-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 20px;
+                }}
+                
+                .filter-group {{
+                    background: #f8fafc;
+                    padding: 20px;
+                    border-radius: 8px;
+                }}
+                
+                .filter-group h4 {{
+                    color: #1e293b;
+                    margin-bottom: 15px;
+                    font-size: 0.9rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                
+                .filter-buttons {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }}
+                
+                .filter-btn {{
+                    padding: 8px 16px;
+                    border: 2px solid #e2e8f0;
+                    background: white;
+                    color: #64748b;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    transition: all 0.3s;
+                    white-space: nowrap;
+                }}
+                
+                .filter-btn:hover {{
+                    border-color: #667eea;
+                    color: #667eea;
+                }}
+                
+                .filter-btn.active {{
+                    background: #667eea;
+                    color: white;
+                    border-color: #667eea;
+                }}
+                
+                .action-buttons {{
+                    display: flex;
+                    gap: 15px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }}
+                
+                .btn {{
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    text-decoration: none;
+                    display: inline-block;
+                }}
+                
+                .btn-primary {{ background: #667eea; color: white; }}
+                .btn-secondary {{ background: #64748b; color: white; }}
+                .btn-success {{ background: #10b981; color: white; }}
+                
+                .btn:hover {{ transform: translateY(-2px); }}
+                
+                .results-summary {{
+                    background: #f1f5f9;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    border-left: 4px solid #667eea;
+                }}
+                
+                .articles-grid {{
+                    display: grid;
+                    gap: 25px;
+                }}
+                
+                .article-card {{
+                    background: white;
+                    border-radius: 12px;
+                    padding: 25px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                    border: 1px solid #e2e8f0;
+                    transition: all 0.3s;
+                }}
+                
+                .article-card:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                }}
+                
+                .article-title {{
+                    font-size: 1.4rem;
+                    color: #1e293b;
+                    margin-bottom: 15px;
+                    line-height: 1.4;
+                    font-weight: 600;
+                }}
+                
+                .article-meta {{
+                    display: flex;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                    flex-wrap: wrap;
+                }}
+                
+                .tab-badge {{
+                    background: #667eea;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                }}
+                
+                .publisher, .date, .word-count {{
+                    color: #64748b;
+                    font-size: 0.85rem;
+                    background: #f8fafc;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                }}
+                
+                .article-preview p {{
+                    color: #475569;
+                    line-height: 1.7;
+                    margin-bottom: 20px;
+                }}
+                
+                .expand-btn {{
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: background 0.3s;
+                }}
+                
+                .expand-btn:hover {{ background: #2563eb; }}
+                
+                .article-full {{
+                    margin-top: 25px;
+                    padding-top: 25px;
+                    border-top: 2px solid #f1f5f9;
+                }}
+                
+                .summary-content {{
+                    color: #374151;
+                    line-height: 1.8;
+                    margin-bottom: 25px;
+                    font-size: 1.05rem;
+                }}
+                
+                .article-actions {{
+                    display: flex;
+                    gap: 15px;
+                    flex-wrap: wrap;
+                }}
+                
+                .source-link {{
+                    background: #10b981;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    transition: background 0.3s;
+                }}
+                
+                .source-link:hover {{ background: #059669; }}
+                
+                .copy-btn {{
+                    background: #6b7280;
+                    color: white;
+                    border: none;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                }}
+                
+                .no-results {{
+                    text-align: center;
+                    padding: 60px 20px;
+                    color: #64748b;
+                }}
+                
+                @media (max-width: 768px) {{
+                    .header h1 {{ font-size: 2rem; }}
+                    .container {{ padding: 15px; }}
+                    .controls-panel {{ padding: 20px; }}
+                    .filters-grid {{ grid-template-columns: 1fr; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🧠 B2B Vault Intelligence Hub</h1>
+                <p>Comprehensive analysis of {len(processed_articles)} B2B articles with AI-powered insights and advanced filtering</p>
+            </div>
+            
+            <div class="container">
+                <div class="stats-dashboard">
+                    <div class="stat-card">
+                        <span class="stat-number">{len(processed_articles)}</span>
+                        <div class="stat-label">Articles Analyzed</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{len(categories)}</span>
+                        <div class="stat-label">Categories</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{len(publishers)}</span>
+                        <div class="stat-label">Publishers</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{sum(len(a.get('summary', '').split()) for a in processed_articles):,}</span>
+                        <div class="stat-label">AI Insights</div>
+                    </div>
+                </div>
+                
+                <div class="controls-panel">
+                    <div class="search-section">
+                        <input type="text" class="search-input" 
+                               placeholder="🔍 Search articles by title, content, insights, company names..." 
+                               onkeyup="performAdvancedSearch()">
+                    </div>
+                    
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <h4>📂 Categories</h4>
+                            <div class="filter-buttons">
+                                <button class="filter-btn active" onclick="filterByCategory('all')">All</button>
+                                {' '.join([f'<button class="filter-btn" onclick="filterByCategory(\'{cat}\')">{cat}</button>' for cat in categories])}
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <h4>📰 Publishers</h4>
+                            <div class="filter-buttons">
+                                <button class="filter-btn active" onclick="filterByPublisher('all')">All</button>
+                                {' '.join([f'<button class="filter-btn" onclick="filterByPublisher(\'{pub}\')">{pub}</button>' for pub in publishers[:8]])}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        {pdf_link}
+                        <button class="btn btn-secondary" onclick="clearAllFilters()">🔄 Clear Filters</button>
+                        <button class="btn btn-primary" onclick="exportData()">📊 Export Data</button>
+                    </div>
+                </div>
+                
+                <div class="results-summary" id="resultsSummary">
+                    Showing all {len(processed_articles)} articles
+                </div>
+                
+                <div class="articles-grid" id="articlesGrid">
+                    {articles_html}
+                </div>
+                
+                <div class="no-results" id="noResults" style="display: none;">
+                    <h3>🔍 No articles found</h3>
+                    <p>Try adjusting your search terms or filters</p>
+                </div>
+            </div>
+
+            <script>
+                let currentCategoryFilter = 'all';
+                let currentPublisherFilter = 'all';
+                let currentSearchTerm = '';
+                
+                function performAdvancedSearch() {{
+                    currentSearchTerm = document.querySelector('.search-input').value.toLowerCase().trim();
+                    applyAllFilters();
+                }}
+                
+                function filterByCategory(category) {{
+                    currentCategoryFilter = category;
+                    updateFilterButtons('.filter-group:first-child .filter-btn', category);
+                    applyAllFilters();
+                }}
+                
+                function filterByPublisher(publisher) {{
+                    currentPublisherFilter = publisher;
+                    updateFilterButtons('.filter-group:last-child .filter-btn', publisher);
+                    applyAllFilters();
+                }}
+                
+                function updateFilterButtons(selector, activeValue) {{
+                    document.querySelectorAll(selector).forEach(btn => {{
+                        btn.classList.remove('active');
+                        if (btn.textContent === activeValue || (activeValue === 'all' && btn.textContent === 'All')) {{
+                            btn.classList.add('active');
+                        }}
+                    }});
+                }}
+                
+                function applyAllFilters() {{
+                    const articles = document.querySelectorAll('.article-card');
+                    let visibleCount = 0;
+                    
+                    articles.forEach(article => {{
+                        const matchesCategory = currentCategoryFilter === 'all' || 
+                                              article.dataset.category === currentCategoryFilter;
+                        const matchesPublisher = currentPublisherFilter === 'all' || 
+                                               article.dataset.publisher === currentPublisherFilter;
+                        const matchesSearch = currentSearchTerm === '' || 
+                                            article.textContent.toLowerCase().includes(currentSearchTerm);
+                        
+                        if (matchesCategory && matchesPublisher && matchesSearch) {{
+                            article.style.display = 'block';
+                            visibleCount++;
+                        }} else {{
+                            article.style.display = 'none';
+                        }}
+                    }});
+                    
+                    updateResultsSummary(visibleCount);
+                }}
+                
+                function updateResultsSummary(count) {{
+                    const summary = document.getElementById('resultsSummary');
+                    const noResults = document.getElementById('noResults');
+                    
+                    if (count === 0) {{
+                        summary.style.display = 'none';
+                        noResults.style.display = 'block';
+                    }} else {{
+                        summary.style.display = 'block';
+                        noResults.style.display = 'none';
+                        summary.textContent = `Showing ${{count}} of {len(processed_articles)} articles`;
+                    }}
+                }}
+                
+                function clearAllFilters() {{
+                    currentCategoryFilter = 'all';
+                    currentPublisherFilter = 'all';
+                    currentSearchTerm = '';
+                    document.querySelector('.search-input').value = '';
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.filter-btn:first-child').forEach(btn => btn.classList.add('active'));
+                    applyAllFilters();
+                }}
+                
+                function toggleArticle(index) {{
+                    const fullDiv = document.getElementById('full-' + index);
+                    const btn = event.target;
+                    
+                    if (fullDiv.style.display === 'none') {{
+                        fullDiv.style.display = 'block';
+                        btn.textContent = 'Show Less';
+                    }} else {{
+                        fullDiv.style.display = 'none';
+                        btn.textContent = 'Read Full Analysis';
+                    }}
+                }}
+                
+                function copyToClipboard(index) {{
+                    const article = document.getElementById('article-' + index);
+                    const title = article.querySelector('.article-title').textContent;
+                    const summary = article.querySelector('.summary-content').textContent;
+                    const text = `${{title}}\\n\\n${{summary}}`;
+                    navigator.clipboard.writeText(text);
+                    event.target.textContent = '✅ Copied!';
+                    setTimeout(() => {{
+                        event.target.textContent = '📋 Copy Analysis';
+                    }}, 2000);
+                }}
+                
+                function exportData() {{
+                    alert('Export functionality coming soon!');
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        
+        # Save the HTML file
+        html_path = os.path.join(website_dir, "index.html")
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        self.logger.info(f"Advanced website generated: {html_path}")
+        if preview:
+            print(f"   ✅ Advanced website saved to: {html_path}")
+        
+        return html_path
+
 # Command line interface for comprehensive scraping
 if __name__ == "__main__":
     import argparse

@@ -189,6 +189,7 @@
              {% if scraping_status.is_running %}style="display: block;"{% endif %}>
             <div class="progress-bar">
                 <div id="progressFill" class="progress-fill" 
+                     style="width: {{ scraping_status.progress }}%;"></div>
             </div>
             <div id="progressText" class="progress-text">{{ scraping_status.current_step }}</div>
         </div>
@@ -298,6 +299,34 @@
                 console.error('Error checking status:', error);
             });
         };
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.innerHTML = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 8000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.innerHTML = message;
+            successDiv.style.display = 'block';
+        }
+        
+        function updateProgress(progress, message) {
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('progressText').textContent = message;
+        }
+        
+        function updateLogs(messages) {
+            const logDiv = document.getElementById('logMessages');
+            logDiv.innerHTML = messages.map(msg => 
+                `<div class="log-message">[${msg.timestamp}] ${msg.message}</div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
     </script>
 </body>
 </html>
