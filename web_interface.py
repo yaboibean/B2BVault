@@ -496,6 +496,130 @@ def process_cached():
     except Exception as e:
         return jsonify({'error': f'Invalid request: {str(e)}'}), 400
 
+@app.route('/start_smart_scraping', methods=['POST'])
+def start_smart_scraping():
+    """Start the smart scraping process"""
+    if scraping_status['is_running']:
+        return jsonify({'error': 'Scraping is already running'}), 400
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        article_limit = data.get('article_limit', 100)
+        processing_mode = data.get('processing_mode', 'auto')
+        
+        if article_limit < 10 or article_limit > 500:
+            return jsonify({'error': 'Article limit must be between 10 and 500'}), 400
+        
+        # Start smart scraping in background thread
+        thread = threading.Thread(target=run_smart_scraping_task, args=(article_limit, processing_mode))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
+
+def run_smart_scraping_task(article_limit, processing_mode):
+    """Run the smart scraping task with random article selection"""
+    global scraping_status, web_logger
+    
+    try:
+        scraping_status['is_running'] = True
+        scraping_status['progress'] = 0
+        scraping_status['current_step'] = 'Initializing smart scraping...'
+        scraping_status['error'] = None
+        scraping_status['log_messages'] = []
+        web_logger.messages = []
+        
+        web_logger.add_message(f"🎲 Starting smart scraping with {article_limit} articles")
+        web_logger.add_message(f"⚙️ Processing mode: {processing_mode}")
+        
+        # Initialize agent for smart scraping
+        agent = B2BVaultAgent(max_workers=2)
+        
+        # Step 1: Discover and randomly select articles
+        scraping_status['current_step'] = f'Discovering articles and randomly selecting {article_limit}...'
+        scraping_status['progress'] = 10
+        web_logger.add_message("📂 Scanning B2B Vault homepage for all articles...")
+        
+        all_articles = agent.scrape_all_articles_from_homepage(preview=False, max_articles=article_limit)
+        
+        if not all_articles:
+            raise Exception("No articles found on homepage")
+        
+        web_logger.add_message(f"✅ Selected {len(all_articles)} random articles for processing")
+        web_logger.add_message(f"📂 Categories: {len(set(a['tab'] for a in all_articles))}")
+        web_logger.add_message(f"📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
+        
+        # Step 2: Process articles based on mode
+        scraping_status['current_step'] = 'Processing articles with AI...'
+        scraping_status['progress'] = 50
+        
+        if processing_mode == "sequential":
+            web_logger.add_message("🔄 Using sequential processing (slower but more stable)")
+            processed_articles = agent.process_multiple_articles(all_articles, preview=False)
+        elif processing_mode == "parallel":
+            web_logger.add_message("⚡ Using parallel processing (faster)")
+            processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
+        else:  # auto
+            web_logger.add_message("🤖 Auto-selecting processing mode...")
+            try:
+                processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
+                web_logger.add_message("✅ Parallel processing successful")
+            except Exception as e:
+                web_logger.add_message(f"⚠️ Parallel failed, switching to sequential: {str(e)}")
+                processed_articles = agent.process_multiple_articles(all_articles[:20], preview=False)
+        
+        if not processed_articles:
+            raise Exception("No articles were successfully processed")
+        
+        web_logger.add_message(f"🤖 Successfully processed {len(processed_articles)} articles")
+        
+        # Step 3: Generate outputs
+        scraping_status['current_step'] = 'Generating reports and website...'
+        scraping_status['progress'] = 80
+        
+        try:
+            pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=False)
+            web_logger.add_message(f"📄 Generated PDF report")
+        except Exception as e:
+            web_logger.add_message(f"⚠️ PDF generation failed: {str(e)}")
+            pdf_path = None
+        
+        try:
+            website_path = agent.generate_website(processed_articles, pdf_path, preview=False)
+            web_logger.add_message(f"🌐 Generated interactive website")
+        except Exception as e:
+            web_logger.add_message(f"⚠️ Website generation failed: {str(e)}")
+            website_path = None
+        
+        # Complete
+        scraping_status['current_step'] = 'Complete!'
+        scraping_status['progress'] = 100
+        scraping_status['results'] = {
+            'total_articles': len(all_articles),
+            'processed_articles': len(processed_articles),
+            'pdf_path': pdf_path,
+            'website_path': website_path,
+            'categories_count': len(set(a['tab'] for a in all_articles)),
+            'publishers_count': len(set(a['publisher'] for a in all_articles)),
+            'processing_mode': processing_mode,
+            'article_limit': article_limit
+        }
+        web_logger.add_message("🎉 Smart scraping completed successfully!")
+        
+    except Exception as e:
+        scraping_status['error'] = str(e)
+        scraping_status['current_step'] = f'Error: {str(e)}'
+        web_logger.add_message(f"❌ ERROR: {str(e)}")
+    finally:
+        scraping_status['is_running'] = False
+        scraping_status['log_messages'] = web_logger.messages
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
 if __name__ == '__main__':
