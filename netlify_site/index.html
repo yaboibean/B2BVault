@@ -2,202 +2,210 @@
         <!DOCTYPE html>
         <html lang="en">
         <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>B2B Vault Analysis Dashboard</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                }
-                
-                .container {
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    padding: 20px;
-                }
-                
-                .header {
-                    text-align: center;
-                    color: white;
-                    margin-bottom: 40px;
-                    padding: 40px 20px;
-                }
-                
-                .header h1 {
-                    font-size: 3rem;
-                    margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-                }
-                
-                .header p {
-                    font-size: 1.2rem;
-                    opacity: 0.9;
-                }
-                
-                .stats {
-                    display: flex;
-                    justify-content: center;
-                    gap: 30px;
-                    margin: 30px 0;
-                    flex-wrap: wrap;
-                }
-                
-                .stat-card {
-                    background: rgba(255,255,255,0.1);
-                    padding: 20px;
-                    border-radius: 10px;
-                    text-align: center;
-                    color: white;
-                    backdrop-filter: blur(10px);
-                }
-                
-                .stat-number {
-                    font-size: 2rem;
-                    font-weight: bold;
-                    display: block;
-                }
-                
-                .search-box {
-                    margin: 30px 0;
-                    text-align: center;
-                }
-                
-                .search-input {
-                    padding: 12px 20px;
-                    font-size: 16px;
-                    border: none;
-                    border-radius: 25px;
-                    width: 300px;
-                    max-width: 90%;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                }
-                
-                .articles-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                    gap: 30px;
-                    margin-top: 30px;
-                }
-                
-                .article-card {
-                    background: white;
-                    border-radius: 15px;
-                    padding: 25px;
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-                    transition: transform 0.3s ease, box-shadow 0.3s ease;
-                    border-left: 5px solid #667eea;
-                }
-                
-                .article-card:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-                }
-                
-                .article-title {
-                    color: #2c3e50;
-                    margin-bottom: 15px;
-                    font-size: 1.3rem;
-                    line-height: 1.4;
-                }
-                
-                .article-meta {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 15px;
-                    flex-wrap: wrap;
-                }
-                
-                .tab-badge {
-                    background: #667eea;
-                    color: white;
-                    padding: 4px 12px;
-                    border-radius: 20px;
-                    font-size: 0.8rem;
-                    font-weight: bold;
-                }
-                
-                .date, .word-count, .publisher {
-                    color: #666;
-                    font-size: 0.9rem;
-                    padding: 4px 8px;
-                    background: #f8f9fa;
-                    border-radius: 15px;
-                }
-                
-                .article-preview p {
-                    margin-bottom: 15px;
-                    color: #555;
-                    line-height: 1.6;
-                }
-                
-                .expand-btn, .source-link {
-                    background: #667eea;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-block;
-                    transition: background 0.3s ease;
-                    font-size: 0.9rem;
-                }
-                
-                .expand-btn:hover, .source-link:hover {
-                    background: #5a6fd8;
-                }
-                
-                .article-full {
-                    margin-top: 20px;
-                    padding-top: 20px;
-                    border-top: 1px solid #eee;
-                }
-                
-                .summary-content {
-                    margin-bottom: 20px;
-                    line-height: 1.7;
-                    color: #444;
-                }
-                
-                .article-link {
-                    text-align: center;
-                }
-                
-                .footer {
-                    text-align: center;
-                    color: white;
-                    margin-top: 50px;
-                    padding: 20px;
-                    opacity: 0.8;
-                }
-                
-                @media (max-width: 768px) {
-                    .articles-grid {
-                        grid-template-columns: 1fr;
-                    }
-                    
-                    .header h1 {
-                        font-size: 2rem;
-                    }
-                    
-                    .stats {
-                        gap: 15px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>B2B Vault Analysis Dashboard</title>
+                            <style>
+                                    * {
+                                            margin: 0;
+                                            padding: 0;
+                                            box-sizing: border-box;
+                                    }
+                                    
+                                    body {
+                                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                                            line-height: 1.6;
+                                            color: #222;
+                                            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                                            min-height: 100vh;
+                                    }
+                                    
+                                    .container {
+                                            max-width: 1200px;
+                                            margin: 0 auto;
+                                            padding: 20px;
+                                    }
+                                    
+                                    .header {
+                                            text-align: center;
+                                            color: #1a1a1a;
+                                            margin-bottom: 40px;
+                                            padding: 40px 20px;
+                                    }
+                                    
+                                    .header h1 {
+                                            font-size: 3rem;
+                                            margin-bottom: 10px;
+                                            text-shadow: 1px 1px 2px rgba(180,180,180,0.1);
+                                            color: #1a237e;
+                                    }
+                                    
+                                    .header p {
+                                            font-size: 1.2rem;
+                                            opacity: 0.85;
+                                            color: #394867;
+                                    }
+                                    
+                                    .stats {
+                                            display: flex;
+                                            justify-content: center;
+                                            gap: 30px;
+                                            margin: 30px 0;
+                                            flex-wrap: wrap;
+                                    }
+                                    
+                                    .stat-card {
+                                            background: #f4f6fb;
+                                            padding: 20px;
+                                            border-radius: 10px;
+                                            text-align: center;
+                                            color: #1a237e;
+                                            box-shadow: 0 2px 8px rgba(44,62,80,0.06);
+                                            border: 1px solid #e3e8ee;
+                                    }
+                                    
+                                    .stat-number {
+                                            font-size: 2rem;
+                                            font-weight: bold;
+                                            display: block;
+                                            color: #394867;
+                                    }
+                                    
+                                    .search-box {
+                                            margin: 30px 0;
+                                            text-align: center;
+                                    }
+                                    
+                                    .search-input {
+                                            padding: 12px 20px;
+                                            font-size: 16px;
+                                            border: 1px solid #b0b8c1;
+                                            border-radius: 25px;
+                                            width: 300px;
+                                            max-width: 90%;
+                                            box-shadow: 0 2px 6px rgba(44,62,80,0.05);
+                                            background: #fff;
+                                            color: #222;
+                                    }
+                                    
+                                    .articles-grid {
+                                            display: grid;
+                                            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                                            gap: 30px;
+                                            margin-top: 30px;
+                                    }
+                                    
+                                    .article-card {
+                                            background: #fff;
+                                            border-radius: 15px;
+                                            padding: 25px;
+                                            box-shadow: 0 4px 16px rgba(44,62,80,0.08);
+                                            transition: transform 0.3s ease, box-shadow 0.3s ease;
+                                            border-left: 5px solid #1a237e;
+                                    }
+                                    
+                                    .article-card:hover {
+                                            transform: translateY(-5px);
+                                            box-shadow: 0 10px 28px rgba(44,62,80,0.13);
+                                    }
+                                    
+                                    .article-title {
+                                            color: #1a237e;
+                                            margin-bottom: 15px;
+                                            font-size: 1.3rem;
+                                            line-height: 1.4;
+                                    }
+                                    
+                                    .article-meta {
+                                            display: flex;
+                                            gap: 10px;
+                                            margin-bottom: 15px;
+                                            flex-wrap: wrap;
+                                    }
+                                    
+                                    .tab-badge {
+                                            background: #394867;
+                                            color: #fff;
+                                            padding: 4px 12px;
+                                            border-radius: 20px;
+                                            font-size: 0.8rem;
+                                            font-weight: bold;
+                                    }
+                                    
+                                    .date, .word-count, .publisher {
+                                            color: #394867;
+                                            font-size: 0.9rem;
+                                            padding: 4px 8px;
+                                            background: #f4f6fb;
+                                            border-radius: 15px;
+                                            border: 1px solid #e3e8ee;
+                                    }
+                                    
+                                    .article-preview p {
+                                            margin-bottom: 15px;
+                                            color: #34495e;
+                                            line-height: 1.6;
+                                    }
+                                    
+                                    .expand-btn, .source-link {
+                                            background: #1a237e;
+                                            color: #fff;
+                                            border: none;
+                                            padding: 10px 20px;
+                                            border-radius: 25px;
+                                            cursor: pointer;
+                                            text-decoration: none;
+                                            display: inline-block;
+                                            transition: background 0.3s ease, box-shadow 0.3s;
+                                            font-size: 0.9rem;
+                                            box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+                                    }
+                                    
+                                    .expand-btn:hover, .source-link:hover {
+                                            background: #394867;
+                                    }
+                                    
+                                    .article-full {
+                                            margin-top: 20px;
+                                            padding-top: 20px;
+                                            border-top: 1px solid #e3e8ee;
+                                    }
+                                    
+                                    .summary-content {
+                                            margin-bottom: 20px;
+                                            line-height: 1.7;
+                                            color: #222;
+                                    }
+                                    
+                                    .article-link {
+                                            text-align: center;
+                                    }
+                                    
+                                    .footer {
+                                            text-align: center;
+                                            color: #394867;
+                                            margin-top: 50px;
+                                            padding: 20px;
+                                            opacity: 0.85;
+                                    }
+                                    
+                                    @media (max-width: 768px) {
+                                            .articles-grid {
+                                                    grid-template-columns: 1fr;
+                                            }
+                                            
+                                            .header h1 {
+                                                    font-size: 2rem;
+                                            }
+                                            
+                                            .stats {
+                                                    gap: 15px;
+                                            }
+                                    }
+                            </style>
+                    </head>
+                    <body>
+                  <div class="container"></div>
                 <div class="header">
                     <h1>B2B Vault Analysis Dashboard</h1>
                     <p>B2B Vault articles summaries</p>
