@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Vault Comprehensive Scraper</title>
+    <title>🚀 B2B Vault Scraper</title>
     <style>
         * {
             margin: 0;
@@ -41,56 +41,74 @@
         .header p {
             color: #7f8c8d;
             font-size: 1.1rem;
-            margin-bottom: 20px;
         }
         
-        .scraping-info {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
+        .tag-selection {
             margin-bottom: 30px;
         }
         
-        .scraping-info h2 {
+        .tag-selection h2 {
             color: #34495e;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             font-size: 1.3rem;
         }
         
         .tags-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
         }
         
-        .tag-badge {
+        .tag-checkbox {
+            display: none;
+        }
+        
+        .tag-label {
             display: block;
-            padding: 10px 15px;
-            background: #667eea;
-            color: white;
-            border-radius: 20px;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
             text-align: center;
-            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
             font-weight: 500;
         }
         
-        .info-box {
-            background: #e8f5e8;
-            border: 1px solid #c3e6c3;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        .tag-label:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
         }
         
-        .info-box h3 {
-            color: #2d5a2d;
-            margin-bottom: 10px;
+        .tag-checkbox:checked + .tag-label {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
         }
         
-        .info-box p {
-            color: #4a704a;
-            margin-bottom: 8px;
+        .quick-actions {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .quick-btn {
+            padding: 10px 20px;
+            border: 2px solid #95a5a6;
+            background: white;
+            color: #95a5a6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-btn:hover {
+            background: #95a5a6;
+            color: white;
         }
         
         .controls {
@@ -145,6 +163,7 @@
             height: 100%;
             background: linear-gradient(90deg, #667eea, #764ba2);
             transition: width 0.3s ease;
+            width: 0%;
         }
         
         .progress-text {
@@ -194,24 +213,25 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 B2B Vault Comprehensive Scraper</h1>
-            <p>Scrape and analyze ALL B2B articles with AI-powered insights</p>
+            <h1>🚀 B2B Vault Scraper</h1>
+            <p>Select the tags you want to scrape from B2B Vault and generate AI-powered insights</p>
         </div>
         
-        <div class="scraping-info">
-            <h2>📊 What will be scraped:</h2>
-            <div class="tags-grid">
-                {% for tag in all_tags %}
-                <span class="tag-badge">{{ tag }}</span>
-                {% endfor %}
+        <div class="tag-selection">
+            <h2>📂 Select Tags to Scrape:</h2>
+            
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="selectAll()">Select All</button>
+                <button class="quick-btn" onclick="clearAll()">Clear All</button>
             </div>
             
-            <div class="info-box">
-                <h3>🎯 Comprehensive Analysis</h3>
-                <p>• Scrapes articles from all B2B Vault categories</p>
-                <p>• AI-powered analysis with TL;DR, takeaways, and recommendations</p>
-                <p>• Generates searchable website with filtering by tag, publisher, and content</p>
-                <p>• Creates comprehensive PDF report for offline reading</p>
+            <div class="tags-grid">
+                {% for tag in available_tags %}
+                <div>
+                    <input type="checkbox" id="tag-{{ loop.index }}" class="tag-checkbox" value="{{ tag }}">
+                    <label for="tag-{{ loop.index }}" class="tag-label">{{ tag }}</label>
+                </div>
+                {% endfor %}
             </div>
         </div>
         
@@ -221,7 +241,7 @@
                 {% if scraping_status.is_running %}
                     🔄 Scraping in Progress...
                 {% else %}
-                    🚀 Start Comprehensive Scraping
+                    🚀 Start Scraping
                 {% endif %}
             </button>
         </div>
@@ -229,8 +249,8 @@
         <div id="progressContainer" class="progress-container" 
              {% if scraping_status.is_running %}style="display: block;"{% endif %}>
             <div class="progress-bar">
-                <div id="progressFill" class="progress-fill"></div>
-            </div>
+                <div id="progressFill" class="progress-fill" 
+                    style="width: {{ scraping_status.progress | default(0) }}%;"></div>
             <div id="progressText" class="progress-text">{{ scraping_status.current_step }}</div>
         </div>
         
@@ -249,6 +269,19 @@
 
     <script>
         let pollingInterval;
+        
+        function getSelectedTags() {
+            const checkboxes = document.querySelectorAll('.tag-checkbox:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+        
+        function selectAll() {
+            document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = true);
+        }
+        
+        function clearAll() {
+            document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = false);
+        }
         
         function showError(message) {
             const errorDiv = document.getElementById('errorMessage');
@@ -279,6 +312,13 @@
         }
         
         function startScraping() {
+            const selectedTags = getSelectedTags();
+            
+            if (selectedTags.length === 0) {
+                showError('Please select at least one tag to scrape.');
+                return;
+            }
+            
             // Disable button and show progress
             document.getElementById('startBtn').disabled = true;
             document.getElementById('startBtn').textContent = '🔄 Starting...';
@@ -291,14 +331,14 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({})
+                body: JSON.stringify({ tags: selectedTags })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     showError(data.error);
                     document.getElementById('startBtn').disabled = false;
-                    document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
+                    document.getElementById('startBtn').textContent = '🚀 Start Scraping';
                     document.getElementById('progressContainer').style.display = 'none';
                 } else {
                     document.getElementById('startBtn').textContent = '🔄 Scraping in Progress...';
@@ -309,7 +349,7 @@
             .catch(error => {
                 showError('Failed to start scraping: ' + error);
                 document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
+                document.getElementById('startBtn').textContent = '🚀 Start Scraping';
                 document.getElementById('progressContainer').style.display = 'none';
             });
         }
@@ -328,11 +368,11 @@
                     clearInterval(pollingInterval);
                     showError(data.error);
                     document.getElementById('startBtn').disabled = false;
-                    document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
+                    document.getElementById('startBtn').textContent = '🚀 Start Scraping';
                 } else if (!data.is_running && data.results) {
                     clearInterval(pollingInterval);
                     showSuccess(`
-                        🎉 Comprehensive scraping completed successfully!<br>
+                        🎉 Scraping completed successfully!<br>
                         📊 Processed ${data.results.processed_articles}/${data.results.total_articles} articles<br>
                         🏷️ Tags: ${data.results.tags_scraped.join(', ')}<br>
                         📄 PDF report and searchable website generated<br>
