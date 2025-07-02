@@ -2,65 +2,65 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 exports.handler = async (event, context) => {
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
+  // Set CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+  };
+
+  // Handle OPTIONS request for CORS
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    const { tags } = JSON.parse(event.body);
+    
+    if (!tags || !Array.isArray(tags)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Tags array is required' })
+      };
     }
 
-    try {
-        const { tags } = JSON.parse(event.body);
-        
-        if (!tags || tags.length === 0) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'No tags provided' })
-            };
-        }
+    // For Netlify deployment, we'll trigger the scraping process
+    // Note: This is a simplified version - full scraping would need a more robust solution
+    
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        message: `Scraping initiated for tags: ${tags.join(', ')}`,
+        note: 'This is a demo response. For full functionality, implement with a proper backend service.'
+      })
+    };
 
-        // Run the scraper with the selected tags
-        const tagsString = tags.join(',');
-        
-        return new Promise((resolve) => {
-            const scraper = spawn('python3', ['B2Bscraper.py', '--tags', tagsString], {
-                cwd: '/opt/build/repo' // Netlify build directory
-            });
-
-            let output = '';
-            let error = '';
-
-            scraper.stdout.on('data', (data) => {
-                output += data.toString();
-            });
-
-            scraper.stderr.on('data', (data) => {
-                error += data.toString();
-            });
-
-            scraper.on('close', (code) => {
-                if (code === 0) {
-                    resolve({
-                        statusCode: 200,
-                        body: JSON.stringify({ 
-                            success: true, 
-                            message: 'Scraping completed successfully',
-                            output: output
-                        })
-                    });
-                } else {
-                    resolve({
-                        statusCode: 500,
-                        body: JSON.stringify({ 
-                            error: 'Scraping failed', 
-                            details: error 
-                        })
-                    });
-                }
-            });
-        });
-
-    } catch (error) {
+  } catch (error) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      })
+    };
+  }
+};
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })

@@ -288,11 +288,11 @@
         
         function showError(message) {
             const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = message;
             errorDiv.style.display = 'block';
             setTimeout(() => {
                 errorDiv.style.display = 'none';
-            }, 5000);
+            }, 8000);
         }
         
         function showSuccess(message) {
@@ -308,13 +308,17 @@
         
         function updateLogs(messages) {
             const logDiv = document.getElementById('logMessages');
-            logDiv.innerHTML = messages.map(msg => 
-                `<div class="log-message">[${msg.timestamp}] ${msg.message}</div>`
-            ).join('');
+            if (Array.isArray(messages)) {
+                logDiv.innerHTML = messages.map(msg => 
+                    `<div class="log-message">[${msg.timestamp}] ${msg.message}</div>`
+                ).join('');
+            } else {
+                logDiv.innerHTML = `<div class="log-message">[${new Date().toLocaleTimeString()}] ${messages}</div>`;
+            }
             logDiv.scrollTop = logDiv.scrollHeight;
         }
         
-        function startScraping() {
+        async function startScraping() {
             const selectedTags = getSelectedTags();
             
             if (selectedTags.length === 0) {
@@ -322,61 +326,125 @@
                 return;
             }
             
-            // Show info message for static site
-            showError('⚠️ Static site detected. To actually run scraping:<br>1. Run "python3 web_interface.py" locally<br>2. Visit http://localhost:5000<br>3. Use the Flask interface for live scraping');
+            // Show loading state
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('startBtn').textContent = '🔄 Starting Scraping...';
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('logContainer').style.display = 'block';
+            
+            updateProgress(10, 'Initializing scraping process...');
+            updateLogs('🚀 Starting B2B Vault scraping via Netlify Functions...');
+            
+            try {
+                // Call Netlify function
+                const response = await fetch('/.netlify/functions/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tags: selectedTags })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Simulate progress for demo
+                    await simulateScrapingProgress(selectedTags);
+                } else {
+                    throw new Error(data.error || 'Scraping failed');
+                }
+                
+            } catch (error) {
+                updateProgress(0, 'Error occurred');
+                updateLogs(`❌ Error: ${error.message}`);
+                showError(`Scraping failed: ${error.message}<br><br>
+                    <strong>For full functionality:</strong><br>
+                    1. This is a static demo site<br>
+                    2. Run locally with: <code>python3 web_interface.py</code><br>
+                    3. Or implement with a backend service like Railway/Heroku`);
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').textContent = '🚀 Start Scraping';
+            }
         }
         
-        function pollStatus() {
-            fetch('/status')
-            .then(response => response.json())
-            .then(data => {
-                updateProgress(data.progress, data.current_step);
+        async function simulateScrapingProgress(selectedTags) {
+            const steps = [
+                { progress: 20, message: 'Connecting to B2B Vault...', log: 'Establishing connection to B2B Vault' },
+                { progress: 35, message: 'Loading article categories...', log: `Scanning ${selectedTags.join(', ')} categories` },
+                { progress: 50, message: 'Collecting article URLs...', log: 'Discovering articles across categories' },
+                { progress: 65, message: 'Downloading article content...', log: 'Fetching full article content' },
+                { progress: 80, message: 'Processing with AI analysis...', log: 'Analyzing articles with AI for insights' },
+                { progress: 95, message: 'Generating reports...', log: 'Creating PDF report and website' },
+                { progress: 100, message: 'Complete!', log: '✅ Demo completed successfully!' }
+            ];
+            
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                updateProgress(step.progress, step.message);
+                updateLogs(step.log);
                 
-                if (data.log_messages) {
-                    updateLogs(data.log_messages);
-                }
-                
-                if (data.error) {
-                    clearInterval(pollingInterval);
-                    showError(data.error);
-                    document.getElementById('startBtn').disabled = false;
-                } else if (!data.is_running && data.results) {
-                    clearInterval(pollingInterval);
-                    showSuccess(`
-                        🎉 Scraping completed successfully!<br>
-                        📊 Processed ${data.results.processed_articles}/${data.results.total_articles} articles<br>
-                        📑 Tags: ${data.results.selected_tags.join(', ')}<br>
-                        <br>
-                        <a href="/results" style="color: white; text-decoration: underline;">View Results</a>
-                    `);
-                    document.getElementById('startBtn').disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error polling status:', error);
-            });
+                // Wait between steps
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            // Show completion message
+            showSuccess(`
+                🎉 Demo scraping completed!<br><br>
+                <strong>Selected Tags:</strong> ${selectedTags.join(', ')}<br><br>
+                <strong>For real scraping:</strong><br>
+                • Run locally: <code>python3 web_interface.py</code><br>
+                • Deploy to Railway/Heroku for cloud scraping<br>
+                • Or use GitHub Actions for scheduled scraping<br><br>
+                <a href="#" onclick="showDeploymentGuide()" style="color: #155724; text-decoration: underline; font-weight: bold;">📚 View Deployment Guide</a>
+            `);
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').textContent = '✅ Demo Complete - Try Again';
+        }
+        
+        function showDeploymentGuide() {
+            const guide = `
+🚀 DEPLOYMENT OPTIONS FOR LIVE SCRAPING:
+
+1. 🖥️ LOCAL DEVELOPMENT:
+   • Run: python3 web_interface.py
+   • Visit: http://localhost:5000
+   • Full functionality with real scraping
+
+2. ☁️ CLOUD DEPLOYMENT (Railway):
+   • Push code to GitHub
+   • Connect Railway to your repo
+   • Add environment variables
+   • Deploy with one click
+
+3. 🔄 AUTOMATED SCRAPING (GitHub Actions):
+   • Set up scheduled workflows
+   • Run scraping automatically
+   • Deploy results to Netlify
+
+4. 🌐 FULL STACK (Heroku/DigitalOcean):
+   • Deploy Flask app to cloud
+   • Use PostgreSQL for data storage
+   • Scale with Redis for caching
+
+Would you like detailed instructions for any of these options?
+            `;
+            
+            alert(guide);
         }
         
         // Check if scraping is already running on page load
         window.onload = function() {
             // Show static site message
-            showError('📄 This is a static demo. For live scraping, run "python3 web_interface.py" locally and visit http://localhost:5000');
-        };
-    </script>
-</body>
-</html>
-        // Check if scraping is already running on page load
-        window.onload = function() {
-            fetch('/status')
-            .then(response => response.json())
-            .then(data => {
-                if (data.is_running) {
-                    document.getElementById('startBtn').disabled = true;
-                    document.getElementById('progressContainer').style.display = 'block';
-                    document.getElementById('logContainer').style.display = 'block';
-                    pollingInterval = setInterval(pollStatus, 1000);
-                }
-            });
+            updateLogs('📄 B2B Vault Scraper - Netlify Demo Version');
+            updateLogs('🔧 For full functionality, deploy with a backend service');
+            
+            // Auto-select "All" by default for demo
+            const allCheckbox = document.querySelector('input[value="All"]');
+            if (allCheckbox) {
+                allCheckbox.checked = true;
+            }
         };
     </script>
 </body>

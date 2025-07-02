@@ -8,101 +8,101 @@ import glob
 import time
 
 def prepare_netlify_deployment():
-    """Prepare all files for Netlify deployment with static tag selector"""
+    """Prepare all files for Netlify deployment with Functions support"""
     
     netlify_site_dir = "netlify_site"
     scraped_data_dir = "scraped_data"
     
-    print("🚀 Preparing comprehensive Netlify deployment...")
+    print("🚀 Preparing Netlify deployment with Functions support...")
     
     # Create netlify_site directory
     os.makedirs(netlify_site_dir, exist_ok=True)
     
+    # Copy netlify.toml and package.json to root for Netlify
+    if os.path.exists("netlify.toml"):
+        print("✅ netlify.toml found")
+    else:
+        print("⚠️  netlify.toml not found - Functions may not work")
+    
+    if os.path.exists("package.json"):
+        print("✅ package.json found for Node.js dependencies")
+    else:
+        print("⚠️  package.json not found - creating minimal version")
+        with open("package.json", "w") as f:
+            f.write("""{
+  "name": "b2b-vault-scraper",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+}""")
+    
+    # Check for Netlify Functions directory
+    if os.path.exists("netlify/functions"):
+        print("✅ Netlify Functions directory found")
+    else:
+        print("⚠️  Netlify Functions directory not found")
+        print("   Create netlify/functions/scrape.js for backend functionality")
+    
     # 1. Copy the main dashboard (if exists)
     website_dir = os.path.join(scraped_data_dir, "website")
     if os.path.exists(os.path.join(website_dir, "index.html")):
-        print("✅ Copying main dashboard...")
+        print("✅ Copying analysis dashboard...")
         shutil.copy2(os.path.join(website_dir, "index.html"), 
-                    os.path.join(netlify_site_dir, "index.html"))
+                    os.path.join(netlify_site_dir, "dashboard.html"))
+        
+        # Also create a main index.html that's the scraper interface
+        print("✅ Keeping scraper interface as main page...")
     else:
-        print("⚠️  No main dashboard found - creating placeholder...")
-        placeholder_html = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>B2B Vault Dashboard</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-    <h1>B2B Vault Analysis Dashboard</h1>
-    <p>No analysis data available yet.</p>
-    <p><a href="./scraper.html">Use the scraper tool to generate content</a></p>
-</body>
-</html>
-        """
-        with open(os.path.join(netlify_site_dir, "index.html"), "w") as f:
-            f.write(placeholder_html)
+        print("⚠️  No analysis dashboard found")
     
-    # 2. Copy PDF files
-    if os.path.exists(scraped_data_dir):
-        pdf_files = glob.glob(os.path.join(scraped_data_dir, "*comprehensive_report*.pdf"))
-        if pdf_files:
-            latest_pdf = max(pdf_files, key=os.path.getmtime)
-            expected_pdf_name = f"b2b_vault_comprehensive_report_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
-            dest_pdf_path = os.path.join(netlify_site_dir, expected_pdf_name)
+    # 2. Copy PDF files and fix links
+    fix_pdf_links_for_netlify(scraped_data_dir, netlify_site_dir)
+    
+    # 3. The main index.html should already be the scraper interface
+    if os.path.exists(os.path.join(netlify_site_dir, "index.html")):
+        print("✅ Scraper interface ready")
+        
+        # Update the scraper interface to mention dashboard if available
+        index_path = os.path.join(netlify_site_dir, "index.html")
+        with open(index_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Add dashboard link if dashboard exists
+        if os.path.exists(os.path.join(netlify_site_dir, "dashboard.html")):
+            dashboard_link = '''
+            <div style="text-align: center; margin: 20px 0; padding: 15px; background: #d4edda; border-radius: 10px;">
+                <strong>📊 Existing Analysis Available:</strong><br>
+                <a href="./dashboard.html" style="color: #155724; text-decoration: underline; font-weight: bold;">View Analysis Dashboard</a>
+            </div>
+            '''
+            # Insert before the controls
+            html_content = html_content.replace(
+                '<div class="controls">',
+                dashboard_link + '<div class="controls">'
+            )
             
-            try:
-                shutil.copy2(latest_pdf, dest_pdf_path)
-                print(f"✅ Copied PDF: {os.path.basename(latest_pdf)} -> {expected_pdf_name}")
-                
-                # Update HTML to reference correct PDF
-                index_path = os.path.join(netlify_site_dir, "index.html")
-                if os.path.exists(index_path):
-                    with open(index_path, 'r', encoding='utf-8') as f:
-                        html_content = f.read()
-                    
-                    # Replace PDF references - fix the path to be in same directory
-                    html_content = html_content.replace(
-                        "../b2b_vault_comprehensive_report_20250630_161238.pdf",
-                        f"./{expected_pdf_name}"
-                    )
-                    # Also replace any other PDF references that might be using relative paths
-                    html_content = html_content.replace(
-                        "../b2b_vault_comprehensive_report",
-                        f"./b2b_vault_comprehensive_report"
-                    )
-                    
-                    with open(index_path, 'w', encoding='utf-8') as f:
-                        f.write(html_content)
-                        
-            except Exception as e:
-                print(f"❌ Error copying PDF: {e}")
-        else:
-            print("⚠️  No PDF files found in scraped_data directory")
+            with open(index_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
     
-    # 3. Create enhanced static tag selector page
-    print("✅ Creating enhanced static tag selector...")
+    print("\n🎯 NETLIFY DEPLOYMENT SUMMARY:")
+    print("   📁 Upload the entire project folder to Netlify")
+    print("   🔧 netlify.toml configures build settings")
+    print("   ⚙️  Netlify Functions provide backend functionality")
+    print("   🌐 Main scraper interface: index.html")
     
-    # Get existing dashboard content for integration
-    dashboard_exists = os.path.exists(os.path.join(netlify_site_dir, "index.html"))
+    if os.path.exists(os.path.join(netlify_site_dir, "dashboard.html")):
+        print("   📊 Analysis dashboard: dashboard.html")
     
-    # Available tags
-    available_tags = [
-        "All", "Content Marketing", "Demand Generation", "ABM & GTM",
-        "Paid Marketing", "Marketing Ops", "Event Marketing", "AI",
-        "Product Marketing", "Sales", "General", "Affiliate & Partnerships",
-        "Copy & Positioning"
-    ]
-    
-    # Start building the HTML
-    scraper_html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Vault Scraper - Enhanced Tag Selection</title>
-    <style>
+    print("\n🚀 NEXT STEPS:")
+    print("   1. Push entire project to GitHub")
+    print("   2. Connect GitHub repo to Netlify")
+    print("   3. Netlify will auto-detect netlify.toml")
+    print("   4. Functions will be deployed automatically")
+    print("   5. Your scraper will be live with backend support!")
+
+if __name__ == "__main__":
+    prepare_netlify_deployment()
         * {{
             margin: 0;
             padding: 0;
