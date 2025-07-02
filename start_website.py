@@ -8,124 +8,52 @@ import socketserver
 import webbrowser
 import sys
 import time
-import shutil
-import glob
-
-def fix_pdf_link():
-    """Find and copy the PDF file to netlify_site if needed"""
-    scraped_data_dir = "scraped_data"
-    netlify_site_dir = "netlify_site"
-    
-    # Look for any comprehensive report PDF in scraped_data
-    if os.path.exists(scraped_data_dir):
-        pdf_files = glob.glob(os.path.join(scraped_data_dir, "*comprehensive_report*.pdf"))
-        if pdf_files:
-            latest_pdf = max(pdf_files, key=os.path.getmtime)
-            # Use the actual filename instead of hardcoded one
-            dest_filename = os.path.basename(latest_pdf)
-            dest_path = os.path.join(netlify_site_dir, dest_filename)
-            
-            # Check if PDF already exists in netlify_site
-            if os.path.exists(dest_path):
-                print(f"✅ PDF file already exists: {dest_filename}")
-                return True
-            
-            try:
-                # Create netlify_site directory if it doesn't exist
-                os.makedirs(netlify_site_dir, exist_ok=True)
-                shutil.copy2(latest_pdf, dest_path)
-                print(f"📄 Copied PDF: {os.path.basename(latest_pdf)} -> {dest_filename}")
-                
-                # Update the HTML file to reference the correct PDF
-                index_path = os.path.join(netlify_site_dir, "index.html")
-                if os.path.exists(index_path):
-                    with open(index_path, 'r', encoding='utf-8') as f:
-                        html_content = f.read()
-                    
-                    # Replace any PDF references to use the correct filename
-                    html_content = html_content.replace(
-                        "b2b_vault_comprehensive_report_20250630_161238.pdf",
-                        dest_filename
-                    )
-                    html_content = html_content.replace(
-                        "../b2b_vault_comprehensive_report",
-                        f"./{dest_filename.replace('.pdf', '')}"
-                    )
-                    
-                    with open(index_path, 'w', encoding='utf-8') as f:
-                        f.write(html_content)
-                    
-                    print(f"✅ Updated HTML to reference: {dest_filename}")
-                
-                return True
-            except Exception as e:
-                print(f"⚠️  Could not copy PDF: {e}")
-        else:
-            print(f"⚠️  No comprehensive report PDF found in {scraped_data_dir}")
-    else:
-        print(f"⚠️  {scraped_data_dir} directory not found")
-    
-    return False
 
 def start_server():
-    # Always use netlify_site as the website directory
-    website_dir = "netlify_site"
+    website_dir = os.path.join(os.path.dirname(__file__), "scraped_data", "website")
     
     if not os.path.exists(website_dir):
-        print(f"❌ Website directory '{website_dir}' not found.")
-        print("Please make sure the netlify_site directory exists with index.html")
+        print("❌ Website not found. Please run the scraper first to generate the website.")
+        print("Run: python3 B2Bscraper.py")
         return
     
     if not os.path.exists(os.path.join(website_dir, "index.html")):
-        print(f"❌ index.html not found in {website_dir}")
+        print("❌ Website index.html not found. Please run the scraper first.")
         return
     
-    # Try to fix PDF link
-    print("🔧 Checking PDF file...")
-    fix_pdf_link()
+    # Try different ports if 8000 is busy
+    ports_to_try = [8000, 8001, 8002, 8003, 8080]
     
-    # Change to the website directory
-    original_dir = os.getcwd()
-    
-    try:
-        os.chdir(website_dir)
-        
-        # Try different ports if 8000 is busy
-        ports_to_try = [8000, 8001, 8002, 8003, 8080]
-        
-        for PORT in ports_to_try:
-            try:
-                Handler = http.server.SimpleHTTPRequestHandler
-                
-                with socketserver.TCPServer(("", PORT), Handler) as httpd:
-                    print(f"🌐 B2B Vault Analysis Website")
-                    print(f"🚀 Server running at http://localhost:{PORT}")
-                    print(f"📁 Serving files from: {os.path.abspath('.')}")
-                    print("📱 Opening in your browser...")
-                    print("⏹️  Press Ctrl+C to stop the server")
-                    print("-" * 50)
-                    
-                    # Give the server a moment to start
-                    time.sleep(1)
-                    webbrowser.open(f'http://localhost:{PORT}')
-                    httpd.serve_forever()
-                    
-            except KeyboardInterrupt:
-                print("\n✅ Server stopped.")
-                break
-            except OSError as e:
-                if "Address already in use" in str(e):
-                    print(f"⚠️  Port {PORT} is busy, trying next port...")
-                    continue
-                else:
-                    print(f"❌ Error starting server on port {PORT}: {e}")
-                    continue
-        else:
-            print("❌ Could not start server on any available port.")
+    for PORT in ports_to_try:
+        try:
+            os.chdir(website_dir)
+            Handler = http.server.SimpleHTTPRequestHandler
             
-    finally:
-        # Always return to original directory
-        os.chdir(original_dir)
+            with socketserver.TCPServer(("", PORT), Handler) as httpd:
+                print(f"🌐 B2B Vault Analysis Website")
+                print(f"🚀 Server running at http://localhost:{PORT}")
+                print(f"📁 Serving files from: {website_dir}")
+                print("📱 Opening in your browser...")
+                print("⏹️  Press Ctrl+C to stop the server")
+                print("-" * 50)
+                
+                # Give the server a moment to start
+                time.sleep(1)
+                webbrowser.open(f'http://localhost:{PORT}')
+                httpd.serve_forever()
+                
+        except KeyboardInterrupt:
+            print("\n✅ Server stopped.")
+            break
+        except OSError as e:
+            if "Address already in use" in str(e):
+                print(f"⚠️  Port {PORT} is busy, trying next port...")
+                continue
+            else:
+                print(f"❌ Error starting server on port {PORT}: {e}")
+                continue
+    else:
+        print("❌ Could not start server on any available port.")
 
 if __name__ == "__main__":
     start_server()
