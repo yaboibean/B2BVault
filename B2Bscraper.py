@@ -640,76 +640,117 @@ class B2BVaultAgent:
         <head>
             <meta charset="UTF-8">
             <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            body {{
+                font-family: 'Inter', Arial, sans-serif;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 30px 10px 30px 10px;
+                line-height: 1.7;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #222;
+            }}
+            .header {{
+                background: linear-gradient(90deg, #667eea 60%, #764ba2 100%);
+                color: #fff;
+                padding: 35px 20px 30px 20px;
+                border-radius: 18px;
+                margin-bottom: 40px;
+                box-shadow: 0 8px 32px rgba(102,126,234,0.10);
+                text-align: center;
+            }}
+            h1 {{
+                font-size: 2.7rem;
+                font-weight: 700;
+                margin-bottom: 10px;
+                letter-spacing: -1px;
+                text-shadow: 0 2px 8px rgba(76, 81, 255, 0.08);
+            }}
+            .header p {{
+                font-size: 1.15rem;
+                margin: 7px 0;
+                opacity: 0.97;
+            }}
+            h2 {{
+                color: #667eea;
+                border-bottom: 2px solid #e3e6f3;
+                padding-bottom: 8px;
+                margin-top: 32px;
+                font-size: 1.35rem;
+                font-weight: 600;
+            }}
+            h3 {{
+                color: #764ba2;
+                margin-top: 22px;
+                font-size: 1.08rem;
+                font-weight: 600;
+            }}
+            .article-section {{
+                margin-bottom: 45px;
+                padding: 28px 22px 22px 22px;
+                border-radius: 14px;
+                background: rgba(255,255,255,0.98);
+                box-shadow: 0 4px 18px rgba(102,126,234,0.07);
+                border-left: 7px solid #667eea;
+                transition: box-shadow 0.2s;
+            }}
+            .article-section:hover {{
+                box-shadow: 0 8px 32px rgba(102,126,234,0.13);
+            }}
+            .article-meta {{
+                background: linear-gradient(90deg, #e8eafc 60%, #f3e8fc 100%);
+                padding: 13px 18px;
+                border-radius: 7px;
+                margin-bottom: 18px;
+                font-size: 0.98rem;
+                color: #3d3d3d;
+            }}
+            .article-meta p {{
+                margin: 4px 0;
+            }}
+            .article-summary {{
+                background: #f8f9fa;
+                padding: 18px 18px 14px 18px;
+                border-radius: 7px;
+                border-left: 4px solid #764ba2;
+                font-size: 1.01rem;
+                color: #2d2d2d;
+            }}
+            .page-break {{
+                page-break-before: always;
+            }}
+            a {{
+                color: #667eea;
+                text-decoration: none;
+                transition: color 0.2s;
+            }}
+            a:hover {{
+                color: #764ba2;
+                text-decoration: underline;
+            }}
+            @media (max-width: 700px) {{
                 body {{
-                    font-family: Arial, sans-serif;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    line-height: 1.6;
-                }}
-                h1 {{
-                    color: #2c3e50;
-                    border-bottom: 3px solid #3498db;
-                    padding-bottom: 15px;
-                    text-align: center;
-                }}
-                h2 {{
-                    color: #34495e;
-                    border-bottom: 2px solid #ecf0f1;
-                    padding-bottom: 10px;
-                    margin-top: 30px;
-                }}
-                h3 {{
-                    color: #2980b9;
-                    margin-top: 25px;
+                padding: 10px 2px;
                 }}
                 .header {{
-                    background-color: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 10px;
-                    margin-bottom: 30px;
-                    text-align: center;
+                padding: 22px 7px 18px 7px;
+                font-size: 1.1rem;
+                }}
+                h1 {{
+                font-size: 1.5rem;
                 }}
                 .article-section {{
-                    margin-bottom: 40px;
-                    padding: 20px;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                    background-color: #fafafa;
+                padding: 13px 7px 10px 7px;
                 }}
-                .article-meta {{
-                    background-color: #e8f4f8;
-                    padding: 15px;
-                    border-radius: 5px;
-                    margin-bottom: 20px;
-                }}
-                .article-meta p {{
-                    margin: 5px 0;
-                }}
-                .article-summary {{
-                    background-color: white;
-                    padding: 20px;
-                    border-radius: 5px;
-                    border-left: 4px solid #3498db;
-                }}
-                .page-break {{
-                    page-break-before: always;
-                }}
-                a {{
-                    color: #3498db;
-                    text-decoration: none;
-                }}
-                a:hover {{
-                    text-decoration: underline;
-                }}
+            }}
             </style>
         </head>
         <body>
             <div class="header">
-                <h1>B2B Vault Comprehensive Analysis Report</h1>
-                <p><strong>Total Articles Analyzed:</strong> {len(processed_articles)}</p>
-                <p><strong>Generated:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
-                <p><strong>Tabs Searched:</strong> {', '.join(self.tabs_to_search)}</p>
+            <h1>🚀 B2B Vault Comprehensive Analysis Report</h1>
+            <p><strong>Total Articles Analyzed:</strong> {len(processed_articles)}</p>
+            <p><strong>Generated:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p><strong>Tabs Searched:</strong> {', '.join(self.tabs_to_search)}</p>
             </div>
             {articles_html}
         </body>
