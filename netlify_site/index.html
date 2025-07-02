@@ -44,7 +44,7 @@
             padding: 20px; 
         }
         
-        .loading-state {
+        .waiting-state {
             text-align: center;
             padding: 60px 20px;
             background: white;
@@ -53,32 +53,32 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         
-        .loading-state h2 {
+        .waiting-state h2 {
             color: #667eea;
             margin-bottom: 15px;
         }
         
-        .loading-state p {
+        .waiting-state p {
             color: #64748b;
             margin-bottom: 20px;
         }
         
         .instructions {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
             padding: 20px;
             border-radius: 10px;
             margin: 20px 0;
         }
         
         .instructions h3 {
-            color: #856404;
+            color: #0c5460;
             margin-bottom: 15px;
         }
         
         .instructions ol {
             margin-left: 20px;
-            color: #856404;
+            color: #0c5460;
         }
         
         .instructions code {
@@ -105,6 +105,25 @@
             transform: translateY(-2px);
         }
         
+        .update-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .update-info h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .update-info p {
+            color: #856404;
+            margin: 5px 0;
+        }
+        
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
             .container { padding: 15px; }
@@ -113,78 +132,59 @@
 </head>
 <body>
     <div class="header">
-        <h1>🧠 B2B Vault Intelligence Hub</h1>
-        <p>Comprehensive analysis of B2B articles with AI-powered insights</p>
+        <h1>🎲 B2B Vault Intelligence Hub</h1>
+        <p>Smart analysis of randomly sampled B2B articles with AI-powered insights</p>
     </div>
     
     <div class="container">
-        <div class="loading-state">
-            <h2>📊 Dashboard Ready</h2>
-            <p>This dashboard will display your scraped B2B Vault analysis once data is generated.</p>
+        <div class="waiting-state">
+            <h2>📊 Waiting for Fresh Analysis</h2>
+            <p>This dashboard will display 100 randomly selected B2B articles once the smart scraper runs.</p>
+            
+            <div class="update-info">
+                <h4>🎲 How Smart Sampling Works:</h4>
+                <p>🔍 Discovers ALL articles on B2B Vault homepage</p>
+                <p>🎲 Randomly selects 100 articles for analysis</p>
+                <p>🤖 Processes them with AI for insights</p>
+                <p>📊 Creates this searchable dashboard</p>
+            </div>
             
             <div class="instructions">
-                <h3>🚀 How to Generate Content:</h3>
+                <h3>🚀 To Generate Fresh Content:</h3>
                 <ol>
-                    <li>Run the scraper locally: <code>python3 B2Bscraper.py --preview</code></li>
-                    <li>Wait for scraping and AI analysis to complete</li>
-                    <li>Run deployment script: <code>python3 prepare_netlify_deployment.py</code></li>
-                    <li>Upload the updated <code>netlify_site</code> folder to your hosting</li>
-                    <li>Your dashboard will automatically display the analyzed articles!</li>
+                    <li>Run the smart scraper: <code>python3 B2Bscraper.py --preview --limit 100</code></li>
+                    <li>Wait for AI analysis to complete (faster than processing all articles!)</li>
+                    <li>Deploy updates: <code>python3 prepare_netlify_deployment.py</code></li>
+                    <li>This page will automatically show your 100 analyzed articles!</li>
                 </ol>
             </div>
             
-            <a href="https://github.com/yourusername/B2BVaultScraper" class="btn">📚 Download Scraper</a>
+            <div style="margin-top: 30px;">
+                <p style="color: #64748b; margin-bottom: 15px;">
+                    The smart scraper is much faster and more memory-efficient than processing every article.
+                </p>
+                <p style="color: #64748b;">
+                    You'll get a great representative sample across all B2B Vault categories and publishers.
+                </p>
+            </div>
         </div>
     </div>
 
     <script>
         window.onload = function() {
-            console.log('B2B Vault Dashboard loaded - waiting for scraped content');
+            console.log('B2B Vault Dashboard loaded - waiting for smart scraper results');
+            
+            // Check if we have scraped content by looking for article elements
+            // This will be replaced when actual scraped content is deployed
+            const hasContent = document.querySelector('.article-card') !== null;
+            
+            if (!hasContent) {
+                console.log('No scraped content found - showing instructions');
+            }
         };
     </script>
 </body>
 </html>
-</body>
-</html>
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            transition: width 0.3s ease;
-            width: 0%;
-        }
-        
-        .progress-text {
-            text-align: center;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        
-        .log-container {
-            background: #2c3e50;
-            color: #ecf0f1;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            display: none;
-        }
-        
-        .log-message {
-            padding: 2px 0;
-        }
-        
-        .error-message {
-            background: #e74c3c;
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .success-message {
-            background: #27ae60;
             color: white;
             padding: 15px;
             border-radius: 10px;
