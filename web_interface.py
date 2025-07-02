@@ -21,19 +21,21 @@ scraping_status = {
     'log_messages': []
 }
 
-# Available tags from B2B Vault - scrape all by default
+# Available tags from B2B Vault - use actual tags from the site
 ALL_TAGS = [
+    "All",
+    "Content Marketing",
+    "Demand Generation", 
+    "ABM & GTM",
+    "Paid Marketing",
+    "Marketing Ops",
+    "Event Marketing",
+    "AI",
+    "Product Marketing",
     "Sales",
-    "Marketing", 
-    "Growth",
-    "Product",
-    "Leadership",
-    "Strategy",
-    "Customer Success",
-    "Operations",
-    "Finance",
-    "HR",
-    "Technology"
+    "General",
+    "Affiliate & Partnerships",
+    "Copy & Positioning"
 ]
 
 class WebScrapingLogger:
@@ -52,8 +54,8 @@ class WebScrapingLogger:
 
 web_logger = WebScrapingLogger()
 
-def run_scraping_task():
-    """Run the scraping task for all tags"""
+def run_scraping_task(selected_tags):
+    """Run the scraping task for selected tags"""
     global scraping_status, web_logger
     
     try:
@@ -64,18 +66,25 @@ def run_scraping_task():
         scraping_status['log_messages'] = []
         web_logger.messages = []
         
-        # Initialize agent with all tags
-        agent = B2BVaultAgent(tabs_to_search=ALL_TAGS, max_workers=3)
+        # Handle "All" selection
+        if "All" in selected_tags or len(selected_tags) == len(ALL_TAGS) - 1:  # -1 for "All" option
+            tags_to_scrape = [tag for tag in ALL_TAGS if tag != "All"]
+            web_logger.add_message("Scraping ALL available tags")
+        else:
+            tags_to_scrape = selected_tags
         
-        # Step 1: Collect articles from all tags
-        scraping_status['current_step'] = 'Collecting articles from all B2B Vault tags...'
+        # Initialize agent with selected tags
+        agent = B2BVaultAgent(tabs_to_search=tags_to_scrape, max_workers=3)
+        
+        # Step 1: Collect articles from selected tags
+        scraping_status['current_step'] = f'Collecting articles from {len(tags_to_scrape)} categories...'
         scraping_status['progress'] = 10
-        web_logger.add_message(f"Starting comprehensive scraping for all tags: {', '.join(ALL_TAGS)}")
+        web_logger.add_message(f"Starting scraping for tags: {', '.join(tags_to_scrape)}")
         
         all_articles = []
-        for i, tag in enumerate(ALL_TAGS):
+        for i, tag in enumerate(tags_to_scrape):
             scraping_status['current_step'] = f'Collecting {tag} articles...'
-            scraping_status['progress'] = 10 + (i * 30 // len(ALL_TAGS))
+            scraping_status['progress'] = 10 + (i * 30 // len(tags_to_scrape))
             web_logger.add_message(f"Collecting articles from {tag} tab...")
             
             try:
@@ -87,9 +96,9 @@ def run_scraping_task():
                 continue
         
         if not all_articles:
-            raise Exception("No articles found across all tags")
+            raise Exception("No articles found for selected tags")
         
-        web_logger.add_message(f"Total articles found across all tags: {len(all_articles)}")
+        web_logger.add_message(f"Total articles found: {len(all_articles)}")
         
         # Step 2: Process articles
         scraping_status['current_step'] = 'Processing articles with AI...'
@@ -137,10 +146,10 @@ def run_scraping_task():
             'processed_articles': len(processed_articles),
             'pdf_path': pdf_path,
             'website_path': website_path,
-            'tags_scraped': ALL_TAGS,
-            'articles_by_tag': {tag: len([a for a in all_articles if a['tab'] == tag]) for tag in ALL_TAGS}
+            'tags_scraped': tags_to_scrape,
+            'articles_by_tag': {tag: len([a for a in all_articles if a['tab'] == tag]) for tag in tags_to_scrape}
         }
-        web_logger.add_message("Comprehensive scraping completed successfully!")
+        web_logger.add_message("Scraping completed successfully!")
         web_logger.add_message("You can now filter and search through all articles on the website!")
         
     except Exception as e:
@@ -153,23 +162,35 @@ def run_scraping_task():
 
 @app.route('/')
 def index():
-    """Main page - start comprehensive scraping"""
+    """Main page with tag selection"""
     return render_template('index.html', 
-                         all_tags=ALL_TAGS,
+                         available_tags=ALL_TAGS,
                          scraping_status=scraping_status)
 
 @app.route('/start_scraping', methods=['POST'])
 def start_scraping():
-    """Start the comprehensive scraping process"""
+    """Start the scraping process with selected tags"""
     if scraping_status['is_running']:
         return jsonify({'error': 'Scraping is already running'}), 400
     
-    # Start scraping all tags in background thread
-    thread = threading.Thread(target=run_scraping_task)
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({'success': True})
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        selected_tags = data.get('tags', [])
+        if not selected_tags:
+            return jsonify({'error': 'No tags selected'}), 400
+        
+        # Start scraping in background thread
+        thread = threading.Thread(target=run_scraping_task, args=(selected_tags,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
 
 @app.route('/status')
 def get_status():
