@@ -1084,21 +1084,104 @@ class B2BVaultAgent:
                     }}
                 }}
                 
+                // Enhanced fuzzy search functionality
+                function fuzzySearch(searchTerm, text) {{
+                    var query = searchTerm.toLowerCase();
+                    var target = text.toLowerCase();
+                    
+                    if (target.includes(query)) return 100;
+                    
+                    var queryWords = query.split(/\\s+/).filter(function(word) {{ return word.length > 1; }});
+                    var score = 0;
+                    var matches = 0;
+                    
+                    queryWords.forEach(function(word) {{
+                        if (target.includes(word)) {{
+                            matches++;
+                            score += 20;
+                        }} else {{
+                            // Check for partial matches and typos
+                            var similarity = calculateSimilarity(word, target);
+                            if (similarity > 0.6) {{
+                                matches++;
+                                score += similarity * 15;
+                            }}
+                        }}
+                    }});
+                    
+                    return score + (matches > 1 ? matches * 5 : 0);
+                }}
+                
+                function calculateSimilarity(str1, str2) {{
+                    if (str2.includes(str1)) return 0.8;
+                    
+                    const longer = str1.length > str2.length ? str1 : str2;
+                    const shorter = str1.length > str2.length ? str2 : str1;
+                    
+                    if (longer.length === 0) return 1.0;
+                    
+                    let matches = 0;
+                    for (let i = 0; i < shorter.length; i++) {{
+                        if (longer.includes(shorter[i])) matches++;
+                    }}
+                    
+                    return matches / longer.length;
+                }}
+                
                 function searchArticles() {{
-                    const searchTerm = document.querySelector('.search-input').value.toLowerCase();
+                    const searchTerm = document.querySelector('.search-input').value.trim();
                     const articles = document.querySelectorAll('.article-card');
                     
+                    if (searchTerm.length === 0) {{
+                        articles.forEach(article => article.style.display = 'block');
+                        return;
+                    }}
+                    
+                    const searchResults = [];
+                    
                     articles.forEach(article => {{
-                        const title = article.querySelector('.article-title').textContent.toLowerCase();
-                        const content = article.textContent.toLowerCase();
+                        const title = article.querySelector('.article-title').textContent;
+                        const content = article.textContent;
+                        const publisher = article.querySelector('.publisher')?.textContent || '';
                         
-                        if (title.includes(searchTerm) || content.includes(searchTerm)) {{
-                            article.style.display = 'block';
+                        const titleScore = fuzzySearch(searchTerm, title) * 3;
+                        const publisherScore = fuzzySearch(searchTerm, publisher) * 2;
+                        const contentScore = fuzzySearch(searchTerm, content);
+                        
+                        const totalScore = titleScore + publisherScore + contentScore;
+                        
+                        searchResults.push({{ element: article, score: totalScore }});
+                    }});
+                    
+                    searchResults.sort((a, b) => b.score - a.score);
+                    
+                    searchResults.forEach((result, index) => {{
+                        if (result.score >= 10) {{
+                            result.element.style.display = 'block';
+                            result.element.style.order = index;
                         }} else {{
-                            article.style.display = 'none';
+                            result.element.style.display = 'none';
                         }}
                     }});
                 }}
+                
+                // Set up real-time search
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const searchInput = document.querySelector('.search-input');
+                    let searchTimeout;
+                    
+                    searchInput.addEventListener('input', function() {{
+                        clearTimeout(searchTimeout);
+                        searchTimeout = setTimeout(searchArticles, 300);
+                    }});
+                    
+                    searchInput.addEventListener('keydown', function(e) {{
+                        if (e.key === 'Escape') {{
+                            this.value = '';
+                            searchArticles();
+                        }}
+                    }});
+                }});
             </script>
         </body>
         </html>

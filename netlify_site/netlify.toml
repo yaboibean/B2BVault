@@ -1,23 +1,23 @@
 [build]
-      publish = "."
-    
-    [[redirects]]
-      from = "/scraper"
-      to = "/scraper.html"
-      status = 301
-    
-    [[redirects]]
-      from = "/dashboard"
-      to = "/index.html"
-      status = 301
-    
-    [[redirects]]
-      from = "/api/*"
-      to = "/404.html"
-      status = 404
-    
-    [[redirects]]
-      from = "/*"
-      to = "/index.html"
-      status = 200
-    
+  publish = "."
+  functions = "netlify/functions"
+
+[build.environment]
+  PYTHON_VERSION = "3.8"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+
+[[redirects]]
+  from = "/scraper"
+  to = "/scraper.html"
+  status = 301
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/index.html"
+  status = 301

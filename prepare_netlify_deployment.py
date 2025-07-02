@@ -581,7 +581,7 @@ def prepare_netlify_deployment():
         scraper_html += """
             <a href="./index.html" class="nav-link dashboard-available">📊 View Analysis Dashboard</a>"""
     
-    scraper_html += f"""
+    scraper_html += """
             <a href="https://github.com/yourusername/B2BVaultScraper" class="nav-link" target="_blank">📚 Download Scraper</a>
             <a href="#" class="nav-link" onclick="showUpdateInstructions()">🔄 Update Instructions</a>
         </div>
@@ -589,44 +589,44 @@ def prepare_netlify_deployment():
 
     <script>
         // Tab switching functionality
-        function switchTab(tabName) {{
-            document.querySelectorAll('.tab-content').forEach(content => {{
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
-            }});
+            });
             
-            document.querySelectorAll('.tab').forEach(tab => {{
+            document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
-            }});
+            });
             
             document.getElementById(tabName + '-tab').classList.add('active');
             event.target.classList.add('active');
             
-            if (tabName === 'history') {{
+            if (tabName === 'history') {
                 loadHistory();
-            }}
-        }}
+            }
+        }
         
         // Tag selection functions
-        function selectAll() {{
+        function selectAll() {
             const allCheckbox = document.querySelector('input[value="All"]');
-            if (allCheckbox) {{
+            if (allCheckbox) {
                 allCheckbox.checked = true;
-            }}
-        }}
+            }
+        }
         
-        function clearAll() {{
+        function clearAll() {
             const checkboxes = document.querySelectorAll('.tag-checkbox');
             checkboxes.forEach(cb => cb.checked = false);
-        }}
+        }
         
-        function generateCommand() {{
+        function generateCommand() {
             const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
                 .map(cb => cb.value);
             
-            if (selectedTags.length === 0) {{
+            if (selectedTags.length === 0) {
                 alert('Please select at least one category');
                 return;
-            }}
+            }
             
             // Show loading state
             const commandOutput = document.getElementById('commandOutput');
@@ -634,252 +634,433 @@ def prepare_netlify_deployment():
             document.getElementById('commandText').innerHTML = '<div style="text-align: center;">🚀 Starting scraper... Please wait...</div>';
             
             // Call Netlify function to run scraper
-            fetch('/.netlify/functions/scrape', {{
+            fetch('/.netlify/functions/scrape', {
                 method: 'POST',
-                headers: {{
+                headers: {
                     'Content-Type': 'application/json'
-                }},
-                body: JSON.stringify({{ tags: selectedTags }})
-            }})
+                },
+                body: JSON.stringify({ tags: selectedTags })
+            })
             .then(response => response.json())
-            .then(data => {{
-                if (data.success) {{
+            .then(data => {
+                if (data.success) {
                     document.getElementById('commandText').innerHTML = `
                         <div style="color: #27ae60;">✅ Scraping completed successfully!</div>
-1. Generate a command using this toolargin-top: 10px; font-size: 0.9rem;">
-2. Run it locally: python3 B2Bscraper.py --tags="YourTags"ith new articles.<br>
-3. Run: python3 prepare_netlify_deployment.py="color: #3498db;">🔄 Refresh the dashboard</a> to see the new content.
-4. Upload netlify_site folder to Netlify
-5. Your dashboard will be updated!`);
-        }}      }} else {{
+                        1. Generate a command using this tool.<br>
+                        2. Run it locally: python3 B2Bscraper.py --tags="YourTags"<br>
+                        3. Run: python3 prepare_netlify_deployment.py<br>
+                        4. Upload netlify_site folder to Netlify<br>
+                        5. Your dashboard will be updated!`;
+                } else {
                     document.getElementById('commandText').innerHTML = `
-        // Local storage functions for history4c3c;">❌ Scraping failed: ${{data.error}}</div>
-        function saveSelection() {{"margin-top: 10px; font-size: 0.9rem;">
+                        <div style="color: #e74c3c;">❌ Scraping failed: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('commandText').innerHTML = `
+                    <div style="color: #e74c3c;">❌ Error: ${error.message}</div>
+                    <div style="margin-top: 10px; font-size: 0.9rem;">Check your internet connection and try again.</div>
+                `;
+            });
+        }
+
+        // Local storage functions for history
+        function saveSelection() {
             const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
                 .map(cb => cb.value);
-                    `;
-            if (selectedTags.length === 0) {{
+            if (selectedTags.length === 0) {
                 alert('Please select at least one category to save');
-                return;r => {{
-            }}  document.getElementById('commandText').innerHTML = `
-                    <div style="color: #e74c3c;">❌ Error: ${{error.message}}</div>
-            const selection = {{margin-top: 10px; font-size: 0.9rem;">
-                tags: selectedTags,internet connection and try again.
+                return;
+            }
+            const selection = {
+                tags: selectedTags,
                 timestamp: new Date().toISOString(),
                 date: new Date().toLocaleDateString()
-            }};;
-            
-            const history = JSON.parse(localStorage.getItem('b2bVaultHistory'
-            selection.addRange(range);
+            };
+            const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
+            history.push(selection);
             localStorage.setItem('b2bVaultHistory', JSON.stringify(history));
             alert('Selection saved to history!');
-        }}nction showUpdateInstructions() {{
+        }
+
+        function showUpdateInstructions() {
             alert(`🔄 To update your dashboard:
-        function loadHistory() {{
+1. Generate command using this tool
+2. Run it locally: python3 B2Bscraper.py --tags="YourTags"
+3. Run: python3 prepare_netlify_deployment.py
+4. Upload netlify_site folder to Netlify
+5. Your dashboard will be updated!`);
+        }
+
+        function loadHistory() {
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             const historyList = document.getElementById('historyList');
-            on3 prepare_netlify_deployment.py
-            if (history.length === 0) {{
+            if (history.length === 0) {
                 historyList.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No previous selections saved</p>';
                 return;
-            }}
-            ocal storage functions for history
+            }
             historyList.innerHTML = history.map((item, index) => `
-                <div class="history-item">m(document.querySelectorAll('.tag-checkbox:checked'))
-                    <div>> cb.value);
-                        <strong>${{item.date}}</strong>
-                        <div class="history-tags">${{item.tags.join(', ')}}</div>
-                    </div>ase select at least one category to save');
+                <div class="history-item">
                     <div>
-                        <button class="btn btn-secondary btn-small" onclick="loadSelection(${{index}})">🔄 Load</button>
-                        <button class="btn btn-primary btn-small" onclick="generateFromHistory(${{index}})">▶️ Generate</button>
-                    </div>n = {{
-                </div>selectedTags,
-            `).join('');p: new Date().toISOString(),
-        }}      date: new Date().toLocaleDateString()
-            }};
-        function loadSelection(index) {{
+                        <strong>${item.date}</strong>
+                        <div class="history-tags">${item.tags.join(', ')}</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary btn-small" onclick="loadSelection(${index})">🔄 Load</button>
+                        <button class="btn btn-primary btn-small" onclick="generateFromHistory(${index})">▶️ Generate</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadSelection(index) {
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             if (!history[index]) return;
-            
             clearAll();
-            
             const savedTags = history[index].tags;
-            savedTags.forEach(tag => {{
-                const checkbox = document.querySelector(`input[value="${{tag}}"]`);
-                if (checkbox) {{
+            savedTags.forEach(tag => {
+                const checkbox = document.querySelector(`input[value="${tag}"]`);
+                if (checkbox) {
                     checkbox.checked = true;
-                }}
-            }});
-            
+                }
+            });
             switchTab('command');
             alert('Selection loaded! You can now generate the command.');
-        }}
-        
-        function generateFromHistory(index) {{
+        }
+
+        function generateFromHistory(index) {
             loadSelection(index);
-            setTimeout(() => {{
+            setTimeout(() => {
                 generateCommand();
-            }}, 100);
-        }}
-        
-        function clearHistory() {{
-            if (confirm('Are you sure you want to clear all saved selections?')) {{
+            }, 100);
+        }
+
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all saved selections?')) {
                 localStorage.removeItem('b2bVaultHistory');
                 loadHistory();
-            }}
-        }}
-        
-        window.onload = function() {{
+            }
+        }
+
+        window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const tags = urlParams.get('tags');
-            if (tags) {{
+            if (tags) {
                 const tagList = tags.split(',');
-                tagList.forEach(tag => {{
-                    const checkbox = document.querySelector(`input[value="${{tag.trim()}}"]`);
-                    if (checkbox) {{
+                tagList.forEach(tag => {
+                    const checkbox = document.querySelector(`input[value="${tag.trim()}"]`);
+                    if (checkbox) {
                         checkbox.checked = true;
-                    }}
-                }});
+                    }
+                });
                 generateCommand();
-            }}
-        }};
-    </script>
-</body>
-</html>"""
+            }
+        };
+
+        // Advanced fuzzy search functionality
+        function fuzzySearch(searchTerm, text) {
+            // Convert to lowercase for case-insensitive search
+            const query = searchTerm.toLowerCase();
+            const target = text.toLowerCase();
+            
+            // Exact match gets highest score
+            if (target.includes(query)) {
+                return 100;
+            }
+            
+            // Handle common typos and variations
+            const correctedQuery = autoCorrect(query);
+            if (correctedQuery !== query && target.includes(correctedQuery)) {
+                return 90;
+            }
+            
+            // Split search into words for partial matching
+            const queryWords = query.split(/\s+/).filter(word => word.length > 1);
+            let score = 0;
+            let matches = 0;
+            
+            queryWords.forEach(word => {
+                if (target.includes(word)) {
+                    matches++;
+                    score += 20;
+                } else {
+                    // Check for partial word matches
+                    const partialMatch = findPartialMatch(word, target);
+                    if (partialMatch > 0.7) {
+                        matches++;
+                        score += partialMatch * 15;
+                    }
+                }
+            });
+            
+            // Bonus for matching multiple words
+            if (matches > 1) {
+                score += matches * 5;
+            }
+            
+            return score;
+        }
+        
+        function autoCorrect(word) {
+            const corrections = {
+                'markting': 'marketing',
+                'marketng': 'marketing',
+                'marekting': 'marketing',
+                'sales': 'sales',
+                'slaes': 'sales',
+                'leadgen': 'lead generation',
+                'lead gen': 'lead generation',
+                'ai': 'ai',
+                'artifiical': 'artificial',
+                'intellgence': 'intelligence',
+                'prospectng': 'prospecting',
+                'outbound': 'outbound',
+                'inbound': 'inbound',
+                'convrsion': 'conversion',
+                'converion': 'conversion',
+                'b2b': 'b2b',
+                'saas': 'saas',
+                'crm': 'crm',
+                'pipeline': 'pipeline',
+                'lead': 'lead',
+                'prospect': 'prospect',
+                'revenue': 'revenue',
+                'growth': 'growth',
+                'stratgey': 'strategy',
+                'strategy': 'strategy'
+            };
+            
+            return corrections[word] || word;
+        }
+        
+        function findPartialMatch(word, text) {
+            if (word.length < 3) return 0;
+            
+            // Check for substring matches
+            for (let i = 0; i <= text.length - word.length; i++) {
+                const substring = text.substring(i, i + word.length);
+                const similarity = calculateSimilarity(word, substring);
+                if (similarity > 0.7) return similarity;
+            }
+            
+            return 0;
+        }
+        
+        function calculateSimilarity(str1, str2) {
+            const longer = str1.length > str2.length ? str1 : str2;
+            const shorter = str1.length > str2.length ? str2 : str1;
+            
+            if (longer.length === 0) return 1.0;
+            
+            const editDistance = getEditDistance(longer, shorter);
+            return (longer.length - editDistance) / longer.length;
+        }
+        
+        function getEditDistance(str1, str2) {
+            const matrix = [];
+            
+            for (let i = 0; i <= str2.length; i++) {
+                matrix[i] = [i];
+            }
+            
+            for (let j = 0; j <= str1.length; j++) {
+                matrix[0][j] = j;
+            }
+            
+            for (let i = 1; i <= str2.length; i++) {
+                for (let j = 1; j <= str1.length; j++) {
+                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+        
+        return matrix[str2.length][str1.length];
+    }
     
-    # Save the enhanced scraper HTML
-    with open(os.path.join(netlify_site_dir, "scraper.html"), "w", encoding="utf-8") as f:
-        f.write(scraper_html)
+    function searchArticles() {
+        const searchTerm = document.querySelector('.search-input').value.trim();
+        const articles = document.querySelectorAll('.article-card');
+        
+        if (searchTerm.length === 0) {
+            // Show all articles if search is empty
+            articles.forEach(article => {
+                article.style.display = 'block';
+                article.style.order = '0';
+            });
+            return;
+        }
+        
+        const searchResults = [];
+        
+        articles.forEach((article, index) => {
+            const title = article.querySelector('.article-title').textContent;
+            const content = article.textContent;
+            const publisher = article.querySelector('.publisher')?.textContent || '';
+            const tabBadge = article.querySelector('.tab-badge')?.textContent || '';
+            
+            // Calculate relevance scores
+            const titleScore = fuzzySearch(searchTerm, title) * 3; // Weight title higher
+            const publisherScore = fuzzySearch(searchTerm, publisher) * 2;
+            const tabScore = fuzzySearch(searchTerm, tabBadge) * 2;
+            const contentScore = fuzzySearch(searchTerm, content);
+            
+            const totalScore = titleScore + publisherScore + tabScore + contentScore;
+            
+            searchResults.push({
+                element: article,
+                score: totalScore,
+                index: index
+            });
+        });
+        
+        // Sort by relevance score
+        searchResults.sort((a, b) => b.score - a.score);
+        
+        // Show/hide articles based on relevance threshold
+        const threshold = 10; // Minimum score to show
+        let visibleCount = 0;
+        
+        searchResults.forEach((result, position) => {
+            if (result.score >= threshold) {
+                result.element.style.display = 'block';
+                result.element.style.order = position;
+                visibleCount++;
+                
+                // Highlight search terms in title
+                highlightSearchTerms(result.element, searchTerm);
+            } else {
+                result.element.style.display = 'none';
+            }
+        });
+        
+        // Show search suggestions if no results
+        showSearchSuggestions(searchTerm, visibleCount);
+    }
     
-    # 4. Create Netlify configuration files
-    print("✅ Creating Netlify configuration...")
+    function highlightSearchTerms(article, searchTerm) {
+        const title = article.querySelector('.article-title');
+        const originalText = title.textContent;
+        
+        // Remove existing highlights
+        title.innerHTML = originalText;
+        
+        if (searchTerm.length > 1) {
+            const regex = new RegExp(`(${searchTerm})`, 'gi');
+            const highlightedText = originalText.replace(regex, '<mark style="background: #fff3cd; padding: 1px 2px; border-radius: 2px;">$1</mark>');
+            title.innerHTML = highlightedText;
+        }
+    }
     
-    netlify_toml = """[build]
-  publish = "."
-  functions = "netlify/functions"
-
-[build.environment]
-  PYTHON_VERSION = "3.8"
-
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "Content-Type"
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-
-[[redirects]]
-  from = "/scraper"
-  to = "/scraper.html"
-  status = 301
-
-[[redirects]]
-  from = "/dashboard"
-  to = "/index.html"
-  status = 301"""
-    with open(os.path.join(netlify_site_dir, "netlify.toml"), "w") as f:
-            f.write(netlify_toml)
+    function showSearchSuggestions(searchTerm, visibleCount) {
+        let suggestionsDiv = document.getElementById('search-suggestions');
+        
+        if (!suggestionsDiv) {
+            suggestionsDiv = document.createElement('div');
+            suggestionsDiv.id = 'search-suggestions';
+            suggestionsDiv.style.cssText = `
+                background: #fff3cd;
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
+                text-align: center;
+                border-left: 4px solid #ffc107;
+            `;
+            document.querySelector('.articles-grid').parentNode.insertBefore(
+                suggestionsDiv, 
+                document.querySelector('.articles-grid')
+            );
+        }
+        
+        if (visibleCount === 0 && searchTerm.length > 0) {
+            const suggestions = generateSearchSuggestions(searchTerm);
+            suggestionsDiv.style.display = 'block';
+            suggestionsDiv.innerHTML = `
+                <h3>🔍 No exact matches found for "${searchTerm}"</h3>
+                <p>Try these suggestions:</p>
+                <div style="margin-top: 10px;">
+                    ${suggestions.map(suggestion => 
+                        `<button onclick="document.querySelector('.search-input').value='${suggestion}'; searchArticles();" 
+                                 style="margin: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 15px; cursor: pointer;">
+                            ${suggestion}
+                         </button>`
+                    ).join('')}
+                </div>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: #666;">
+                    💡 Tip: Try searching for topics like "sales", "marketing", "AI", "leads", or company names
+                </p>
+            `;
+        } else {
+            suggestionsDiv.style.display = 'none';
+        }
+    }
     
-    redirects_content = """# Netlify redirects
-/scraper /scraper.html 301
-/dashboard /index.html 301
-/api/* /404.html 404
-/* /index.html 200
-"""
-    with open(os.path.join(netlify_site_dir, "_redirects"), "w") as f:
-        f.write(redirects_content)
+    function generateSearchSuggestions(searchTerm) {
+        const commonTerms = [
+            'sales', 'marketing', 'AI', 'lead generation', 'prospecting',
+            'conversion', 'pipeline', 'revenue', 'growth', 'strategy',
+            'outbound', 'inbound', 'CRM', 'SaaS', 'B2B', 'cold email',
+            'LinkedIn', 'automation', 'personalization', 'targeting'
+        ];
+        
+        // Find similar terms
+        const suggestions = [];
+        commonTerms.forEach(term => {
+            if (calculateSimilarity(searchTerm.toLowerCase(), term.toLowerCase()) > 0.3) {
+                suggestions.push(term);
+            }
+        });
+        
+        // Add some popular fallbacks if no similar terms found
+        if (suggestions.length === 0) {
+            suggestions.push('sales', 'marketing', 'AI', 'leads');
+        }
+        
+        return suggestions.slice(0, 5); // Limit to 5 suggestions
+    }
     
-    # 5. Create deployment README
-    print("✅ Creating deployment documentation...")
+    // Add real-time search with debouncing
+    let searchTimeout;
+    function setupRealTimeSearch() {
+        const searchInput = document.querySelector('.search-input');
+        
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchArticles();
+            }, 300); // Wait 300ms after user stops typing
+        });
+        
+        // Clear search on Escape key
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                this.value = '';
+                searchArticles();
+            }
+        });
+    }
     
-    readme_content = f"""# B2B Vault Analysis Dashboard - Netlify Deployment
-
-## 🌐 Live Features
-- **Main Dashboard**: [index.html](./index.html) - View analyzed articles
-- **Scraper Tool**: [scraper.html](./scraper.html) - Generate scraping commands
-- **PDF Report**: Download comprehensive analysis report
-
-## 🚀 Quick Deploy to Netlify
-1. **Upload Files**: Drag the entire `{netlify_site_dir}` folder to Netlify
-2. **Configure**: Set publish directory to root (`.`)
-3. **Deploy**: Your site will be live immediately!
-
-## 🔧 How to Update Content
-
-### Method 1: Use Static Scraper (Recommended)
-1. Visit `/scraper.html` on your deployed site
-2. Select categories and generate command
-3. Run command locally: `python3 B2Bscraper.py --tags="Sales,Marketing" --generate-netlify`
-4. Re-upload the generated files
-
-### Method 2: Local Development
-```bash
-# Clone the repository
-git clone [your-repo-url]
-cd B2BVaultScraper
-
-# Install dependencies
-pip install playwright beautifulsoup4 flask requests tenacity weasyprint
-
-# Run scraper
-python3 B2Bscraper.py --tags="Sales,Marketing,AI"
-
-# Prepare for Netlify
-python3 prepare_netlify_deployment.py
-
-# Upload netlify_site folder to Netlify
-```
-
-## 📁 File Structure
-```
-netlify_site/
-├── index.html              # Main dashboard
-├── scraper.html            # Static tag selector
-├── *.pdf                   # Analysis reports
-├── netlify.toml           # Netlify configuration
-├── _redirects             # URL redirects
-└── README.md              # This file
-```
-
-## 🎯 Supported Categories
-{', '.join(available_tags)}
-
-## 📊 Features
-- ✅ **Responsive Design**: Works on desktop and mobile
-- ✅ **Search Functionality**: Find articles quickly
-- ✅ **PDF Downloads**: Complete analysis reports
-- ✅ **SEO Optimized**: Meta tags and proper structure
-- ✅ **Fast Loading**: Optimized static files
-
-## 🔗 Useful Links
-- Dashboard: `/` or `/dashboard`
-- Scraper: `/scraper`
-- PDF Report: `/*.pdf`
-
----
-Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}
-Deployment ready! 🚀
-"""
-    
-    with open(os.path.join(netlify_site_dir, "README.md"), "w", encoding="utf-8") as f:
-        f.write(readme_content)
-    
-    # 6. List all files for deployment
-    print("\n📁 Netlify deployment files ready:")
-    files = os.listdir(netlify_site_dir)
-    for file in files:
-        file_path = os.path.join(netlify_site_dir, file)
-        if os.path.isfile(file_path):
-            size = os.path.getsize(file_path)
-            print(f"   ✅ {file} ({size:,} bytes)")
-    
-    print(f"\n🌐 Ready for Netlify deployment!")
-    print(f"📁 Upload the contents of '{netlify_site_dir}' to Netlify")
-    print("💡 Set publish directory to '.' (root)")
-    print("🚀 Your static B2B Vault dashboard will be live!")
-    
-    return True
-
-if __name__ == "__main__":
-    prepare_netlify_deployment()
+    // Initialize when page loads
+    window.onload = function() {
+        setupRealTimeSearch();
+        
+        // ...existing onload code...
+        const urlParams = new URLSearchParams(window.location.search);
+        const tags = urlParams.get('tags');
+        if (tags) {
+            const tagList = tags.split(',');
+            tagList.forEach(tag => {
+                const checkbox = document.querySelector(`input[value="${tag.trim()}"]`);
+                                if
+                            }
+                        };
+                    </script>
+                </body>
+                </html>
+                """
