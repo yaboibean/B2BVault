@@ -56,25 +56,30 @@ def prepare_netlify_deployment():
     # Create netlify_site directory
     os.makedirs(netlify_site_dir, exist_ok=True)
     
-    # 1. Check for and copy the main dashboard
+    # 1. Check for and copy the main dashboard from the website folder
     website_dir = os.path.join(scraped_data_dir, "website")
     dashboard_exists = False
     
     if os.path.exists(os.path.join(website_dir, "index.html")):
-        print("✅ Copying latest dashboard...")
+        print("✅ Found fresh analysis dashboard!")
+        
+        # Copy the main dashboard file (this replaces the waiting message)
         shutil.copy2(os.path.join(website_dir, "index.html"), 
                     os.path.join(netlify_site_dir, "index.html"))
         dashboard_exists = True
         
-        # Copy any additional files from the website
+        print(f"✅ Copied fresh dashboard with analyzed articles")
+        
+        # Copy any additional website files
         for file_pattern in ["*.css", "*.js", "*.png", "*.jpg", "*.ico"]:
             for file_path in glob.glob(os.path.join(website_dir, file_pattern)):
                 shutil.copy2(file_path, netlify_site_dir)
                 print(f"✅ Copied: {os.path.basename(file_path)}")
                 
     else:
-        print("⚠️  No analysis dashboard found")
-        print("   💡 Run 'python3 B2Bscraper.py --preview' first")
+        print("⚠️  No fresh analysis dashboard found")
+        print("   💡 The Netlify site will show the 'waiting for content' message")
+        print("   💡 Run 'python3 B2Bscraper.py --preview --limit 100' first")
     
     # 2. Copy latest PDF files
     if os.path.exists(scraped_data_dir):
@@ -98,26 +103,30 @@ def prepare_netlify_deployment():
     
     print(f"\n📊 NETLIFY DEPLOYMENT STATUS:")
     if dashboard_exists:
-        print("   ✅ Latest dashboard ready for deployment!")
-        print("   📊 Main page: Analysis dashboard (index.html)")
-        print("   📄 Latest PDF report included")
+        print("   ✅ Fresh dashboard with analyzed articles ready!")
+        print("   📊 Main page: Interactive dashboard showing your 100 articles")
+        print("   🔍 Includes search, filtering, and AI summaries")
+        print("   📄 PDF report included for download")
+        print("   🎲 Shows randomly sampled articles from B2B Vault")
     else:
-        print("   📋 Placeholder dashboard (no fresh content)")
+        print("   📋 Placeholder dashboard (visitors will see 'waiting' message)")
+        print("   💡 Run scraper first to generate fresh content")
     
     # 4. Attempt automatic deployment
     print(f"\n🚀 ATTEMPTING AUTO-DEPLOYMENT...")
     auto_deployed = auto_deploy_to_netlify()
     
     if auto_deployed:
-        print("🎉 SUCCESS! Your Netlify site has been updated automatically!")
+        print("🎉 SUCCESS! Your Netlify site now shows the analyzed articles!")
+        print("🌐 Visitors can now browse, search, and read AI summaries")
     else:
         print("📋 MANUAL DEPLOYMENT REQUIRED:")
-        print("   1. Install Netlify CLI: npm install -g netlify-cli")
-        print("   2. Run: netlify login")
-        print("   3. Run: netlify init (first time only)")
-        print("   4. Run this script again for auto-deployment")
-        print("   OR")
-        print("   📁 Manually upload the 'netlify_site' folder to Netlify dashboard")
+        print("   1. Upload the entire 'netlify_site' folder to Netlify")
+        print("   2. Or install Netlify CLI for automatic deployment:")
+        print("      npm install -g netlify-cli")
+        print("      netlify login")
+        print("      netlify init (first time only)")
+        print("      python3 prepare_netlify_deployment.py (run again)")
     
     return dashboard_exists
 
@@ -199,4 +208,4 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     prepare_netlify_deployment()
     create_auto_update_script()
-        
+
