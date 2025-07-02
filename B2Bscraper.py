@@ -1060,7 +1060,7 @@ class B2BVaultAgent:
                 <div class="footer">
                     <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')} | Powered by Perplexity AI</p>
                     {f'''<div style="margin-top: 15px;">
-                        <a href="../{os.path.basename(pdf_path)}" 
+                        <a href="./{os.path.basename(pdf_path)}" 
                            class="source-link" 
                            download
                            style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 10px;">

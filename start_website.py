@@ -15,24 +15,48 @@ def fix_pdf_link():
     """Find and copy the PDF file to netlify_site if needed"""
     scraped_data_dir = "scraped_data"
     netlify_site_dir = "netlify_site"
-    expected_pdf = "b2b_vault_comprehensive_report_20250630_161238.pdf"
-    dest_path = os.path.join(netlify_site_dir, expected_pdf)
-    
-    # Check if PDF already exists in netlify_site
-    if os.path.exists(dest_path):
-        print(f"✅ PDF file already exists: {expected_pdf}")
-        return True
     
     # Look for any comprehensive report PDF in scraped_data
     if os.path.exists(scraped_data_dir):
         pdf_files = glob.glob(os.path.join(scraped_data_dir, "*comprehensive_report*.pdf"))
         if pdf_files:
             latest_pdf = max(pdf_files, key=os.path.getmtime)
+            # Use the actual filename instead of hardcoded one
+            dest_filename = os.path.basename(latest_pdf)
+            dest_path = os.path.join(netlify_site_dir, dest_filename)
+            
+            # Check if PDF already exists in netlify_site
+            if os.path.exists(dest_path):
+                print(f"✅ PDF file already exists: {dest_filename}")
+                return True
+            
             try:
                 # Create netlify_site directory if it doesn't exist
                 os.makedirs(netlify_site_dir, exist_ok=True)
                 shutil.copy2(latest_pdf, dest_path)
-                print(f"📄 Copied PDF: {os.path.basename(latest_pdf)} -> {expected_pdf}")
+                print(f"📄 Copied PDF: {os.path.basename(latest_pdf)} -> {dest_filename}")
+                
+                # Update the HTML file to reference the correct PDF
+                index_path = os.path.join(netlify_site_dir, "index.html")
+                if os.path.exists(index_path):
+                    with open(index_path, 'r', encoding='utf-8') as f:
+                        html_content = f.read()
+                    
+                    # Replace any PDF references to use the correct filename
+                    html_content = html_content.replace(
+                        "b2b_vault_comprehensive_report_20250630_161238.pdf",
+                        dest_filename
+                    )
+                    html_content = html_content.replace(
+                        "../b2b_vault_comprehensive_report",
+                        f"./{dest_filename.replace('.pdf', '')}"
+                    )
+                    
+                    with open(index_path, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    
+                    print(f"✅ Updated HTML to reference: {dest_filename}")
+                
                 return True
             except Exception as e:
                 print(f"⚠️  Could not copy PDF: {e}")

@@ -62,10 +62,15 @@ def prepare_netlify_deployment():
                     with open(index_path, 'r', encoding='utf-8') as f:
                         html_content = f.read()
                     
-                    # Replace PDF references
+                    # Replace PDF references - fix the path to be in same directory
                     html_content = html_content.replace(
                         "../b2b_vault_comprehensive_report_20250630_161238.pdf",
                         f"./{expected_pdf_name}"
+                    )
+                    # Also replace any other PDF references that might be using relative paths
+                    html_content = html_content.replace(
+                        "../b2b_vault_comprehensive_report",
+                        f"./b2b_vault_comprehensive_report"
                     )
                     
                     with open(index_path, 'w', encoding='utf-8') as f:
@@ -664,12 +669,7 @@ def prepare_netlify_deployment():
                 date: new Date().toLocaleDateString()
             }};;
             
-            const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
-            history.unshift(selection);
-            const range = document.createRange();
-            if (history.length > 10) {{ement);
-                history.splice(10);w.getSelection();
-            }}lection.removeAllRanges();
+            const history = JSON.parse(localStorage.getItem('b2bVaultHistory'
             selection.addRange(range);
             localStorage.setItem('b2bVaultHistory', JSON.stringify(history));
             alert('Selection saved to history!');
