@@ -133,3 +133,6 @@ __pycache__/
 .DS_Store
 node_modules/
 __pycache__/
+.DS_Store
+node_modules/
+__pycache__/
