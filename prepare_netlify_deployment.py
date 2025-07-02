@@ -401,6 +401,25 @@ def prepare_netlify_deployment():
             font-weight: bold;
             margin-right: 15px;
         }}
+        
+        .articles-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+            /* Enable CSS Grid ordering */
+        }}
+        
+        .article-card {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-left: 5px solid #667eea;
+            /* Enable ordering */
+            order: 0;
+        }}
     </style>
 </head>
 <body>
@@ -887,12 +906,13 @@ def prepare_netlify_deployment():
     function searchArticles() {
         const searchTerm = document.querySelector('.search-input').value.trim();
         const articles = document.querySelectorAll('.article-card');
+        const articlesGrid = document.getElementById('articles-grid');
         
         if (searchTerm.length === 0) {
-            // Show all articles if search is empty
-            articles.forEach(article => {
+            // Show all articles in original order
+            articles.forEach((article, index) => {
                 article.style.display = 'block';
-                article.style.order = '0';
+                article.style.order = index;
             });
             return;
         }
@@ -916,25 +936,36 @@ def prepare_netlify_deployment():
             searchResults.push({
                 element: article,
                 score: totalScore,
-                index: index
+                originalIndex: index
             });
         });
         
-        // Sort by relevance score
+        // Sort by relevance score (highest to lowest)
         searchResults.sort((a, b) => b.score - a.score);
         
-        // Show/hide articles based on relevance threshold
+        // Apply ordering and visibility
         const threshold = 10; // Minimum score to show
         let visibleCount = 0;
+        let displayOrder = 0;
         
-        searchResults.forEach((result, position) => {
+        searchResults.forEach((result) => {
             if (result.score >= threshold) {
                 result.element.style.display = 'block';
-                result.element.style.order = position;
+                result.element.style.order = displayOrder;
+                displayOrder++;
                 visibleCount++;
                 
                 // Highlight search terms in title
                 highlightSearchTerms(result.element, searchTerm);
+                
+                // Add relevance indicator for high scores
+                if (result.score > 50) {
+                    result.element.style.borderLeftColor = '#27ae60'; // Green for highly relevant
+                } else if (result.score > 25) {
+                    result.element.style.borderLeftColor = '#f39c12'; // Orange for moderately relevant
+                } else {
+                    result.element.style.borderLeftColor = '#667eea'; // Default blue
+                }
             } else {
                 result.element.style.display = 'none';
             }
@@ -942,131 +973,85 @@ def prepare_netlify_deployment():
         
         // Show search suggestions if no results
         showSearchSuggestions(searchTerm, visibleCount);
+        
+        // Add search results summary
+        showSearchSummary(searchTerm, visibleCount, searchResults.length);
     }
     
-    function highlightSearchTerms(article, searchTerm) {
-        const title = article.querySelector('.article-title');
-        const originalText = title.textContent;
+    function showSearchSummary(searchTerm, visibleCount, totalCount) {
+        let summaryDiv = document.getElementById('search-summary');
         
-        // Remove existing highlights
-        title.innerHTML = originalText;
-        
-        if (searchTerm.length > 1) {
-            const regex = new RegExp(`(${searchTerm})`, 'gi');
-            const highlightedText = originalText.replace(regex, '<mark style="background: #fff3cd; padding: 1px 2px; border-radius: 2px;">$1</mark>');
-            title.innerHTML = highlightedText;
-        }
-    }
-    
-    function showSearchSuggestions(searchTerm, visibleCount) {
-        let suggestionsDiv = document.getElementById('search-suggestions');
-        
-        if (!suggestionsDiv) {
-            suggestionsDiv = document.createElement('div');
-            suggestionsDiv.id = 'search-suggestions';
-            suggestionsDiv.style.cssText = `
-                background: #fff3cd;
-                padding: 15px;
+        if (!summaryDiv) {
+            summaryDiv = document.createElement('div');
+            summaryDiv.id = 'search-summary';
+            summaryDiv.style.cssText = `
+                background: #f8f9fa;
+                padding: 10px 20px;
                 border-radius: 10px;
-                margin: 20px 0;
+                margin: 10px 0;
                 text-align: center;
-                border-left: 4px solid #ffc107;
+                font-size: 0.9rem;
+                color: #666;
+                border-left: 4px solid #667eea;
             `;
             document.querySelector('.articles-grid').parentNode.insertBefore(
-                suggestionsDiv, 
+                summaryDiv, 
                 document.querySelector('.articles-grid')
             );
         }
         
-        if (visibleCount === 0 && searchTerm.length > 0) {
-            const suggestions = generateSearchSuggestions(searchTerm);
-            suggestionsDiv.style.display = 'block';
-            suggestionsDiv.innerHTML = `
-                <h3>🔍 No exact matches found for "${searchTerm}"</h3>
-                <p>Try these suggestions:</p>
-                <div style="margin-top: 10px;">
-                    ${suggestions.map(suggestion => 
-                        `<button onclick="document.querySelector('.search-input').value='${suggestion}'; searchArticles();" 
-                                 style="margin: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 15px; cursor: pointer;">
-                            ${suggestion}
-                         </button>`
-                    ).join('')}
-                </div>
-                <p style="margin-top: 10px; font-size: 0.9rem; color: #666;">
-                    💡 Tip: Try searching for topics like "sales", "marketing", "AI", "leads", or company names
-                </p>
-            `;
-        } else {
-            suggestionsDiv.style.display = 'none';
-        }
-    }
-    
-    function generateSearchSuggestions(searchTerm) {
-        } else {
-            suggestionsDiv.style.display = 'none';
-        }
-    }
-    
-    function generateSearchSuggestions(searchTerm) {
-        const commonTerms = [
-            'sales', 'marketing', 'AI', 'lead generation', 'prospecting',
-            'conversion', 'pipeline', 'revenue', 'growth', 'strategy',
-            'outbound', 'inbound', 'CRM', 'SaaS', 'B2B', 'cold email',
-            'LinkedIn', 'automation', 'personalization', 'targeting'
-        ];
-        
-        // Find similar terms
-        const suggestions = [];
-        commonTerms.forEach(term => {
-            if (calculateSimilarity(searchTerm.toLowerCase(), term.toLowerCase()) > 0.3) {
-                suggestions.push(term);
+        if (searchTerm.length > 0) {
+            summaryDiv.style.display = 'block';
+            if (visibleCount > 0) {
+                summaryDiv.innerHTML = `
+                    🔍 Found <strong>${visibleCount}</strong> relevant articles for "<strong>${searchTerm}</strong>" 
+                    (${totalCount - visibleCount} others filtered out) • Sorted by relevance
+                `;
+            } else {
+                summaryDiv.innerHTML = `
+                    🔍 No articles found for "<strong>${searchTerm}</strong>" • Try different keywords
+                `;
             }
-        });
-        
-        // Add some popular fallbacks if no similar terms found
-        if (suggestions.length === 0) {
-            suggestions.push('sales', 'marketing', 'AI', 'leads');
+        } else {
+            summaryDiv.style.display = 'none';
+        }
+    }
+
+        // Real-time search functionality
+        let searchTimeout;
+        function setupRealTimeSearch() {
+            const searchInput = document.querySelector('.search-input');
+            
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    searchArticles();
+                }, 300); // Wait 300ms after user stops typing
+            });
+            
+            // Clear search on Escape key
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    this.value = '';
+                    searchArticles();
+                }
+            });
         }
         
-        return suggestions.slice(0, 5); // Limit to 5 suggestions
-    }
-    
-    // Add real-time search with debouncing
-    let searchTimeout;
-    function setupRealTimeSearch() {
-        const searchInput = document.querySelector('.search-input');
-        
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                searchArticles();
-            }, 300); // Wait 300ms after user stops typing
-        });
-        
-        // Clear search on Escape key
-        searchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                this.value = '';
-                searchArticles();
-            }
-        });
-    }
-    
-    // Initialize when page loads
-    window.onload = function() {
-        setupRealTimeSearch();
-        
-        // ...existing onload code...
-        const urlParams = new URLSearchParams(window.location.search);
-        const tags = urlParams.get('tags');
-        if (tags) {
-            const tagList = tags.split(',');
-            tagList.forEach(tag => {
-                const checkbox = document.querySelector(`input[value="${tag.trim()}"]`);
-                                if
-                            }
-                        };
-                    </script>
-                </body>
-                </html>
-                """
+        // Initialize when page loads
+        window.onload = function() {
+            setupRealTimeSearch();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const tags = urlParams.get('tags');
+            if (tags) {
+                const tagList = tags.split(',');
+                tagList.forEach(tag => {
+                    const checkbox = document.querySelector(`input[value="${tag.trim()}"]`);
+                                    if
+                                }
+                            };
+                        </script>
+                    </body>
+                    </html>
+                    """
