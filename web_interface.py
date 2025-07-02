@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Web interface for B2B Vault Scraper with tag selection
+Web interface for B2B Vault Scraper - scrapes all tags by default
 """
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
@@ -21,8 +21,8 @@ scraping_status = {
     'log_messages': []
 }
 
-# Available tags from B2B Vault
-AVAILABLE_TAGS = [
+# Available tags from B2B Vault - scrape all by default
+ALL_TAGS = [
     "Sales",
     "Marketing", 
     "Growth",
@@ -52,8 +52,8 @@ class WebScrapingLogger:
 
 web_logger = WebScrapingLogger()
 
-def run_scraping_task(selected_tags):
-    """Run the scraping task in a separate thread"""
+def run_scraping_task():
+    """Run the scraping task for all tags"""
     global scraping_status, web_logger
     
     try:
@@ -64,18 +64,18 @@ def run_scraping_task(selected_tags):
         scraping_status['log_messages'] = []
         web_logger.messages = []
         
-        # Initialize agent with selected tags
-        agent = B2BVaultAgent(tabs_to_search=selected_tags, max_workers=3)
+        # Initialize agent with all tags
+        agent = B2BVaultAgent(tabs_to_search=ALL_TAGS, max_workers=3)
         
-        # Step 1: Collect articles
-        scraping_status['current_step'] = 'Collecting articles from B2B Vault...'
+        # Step 1: Collect articles from all tags
+        scraping_status['current_step'] = 'Collecting articles from all B2B Vault tags...'
         scraping_status['progress'] = 10
-        web_logger.add_message(f"Starting scraping for tags: {', '.join(selected_tags)}")
+        web_logger.add_message(f"Starting comprehensive scraping for all tags: {', '.join(ALL_TAGS)}")
         
         all_articles = []
-        for i, tag in enumerate(selected_tags):
+        for i, tag in enumerate(ALL_TAGS):
             scraping_status['current_step'] = f'Collecting {tag} articles...'
-            scraping_status['progress'] = 10 + (i * 20 // len(selected_tags))
+            scraping_status['progress'] = 10 + (i * 30 // len(ALL_TAGS))
             web_logger.add_message(f"Collecting articles from {tag} tab...")
             
             try:
@@ -87,20 +87,20 @@ def run_scraping_task(selected_tags):
                 continue
         
         if not all_articles:
-            raise Exception("No articles found for selected tags")
+            raise Exception("No articles found across all tags")
         
-        web_logger.add_message(f"Total articles found: {len(all_articles)}")
+        web_logger.add_message(f"Total articles found across all tags: {len(all_articles)}")
         
         # Step 2: Process articles
         scraping_status['current_step'] = 'Processing articles with AI...'
-        scraping_status['progress'] = 40
+        scraping_status['progress'] = 50
         
         try:
             processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
         except Exception as e:
             web_logger.add_message(f"Parallel processing failed: {str(e)}")
             web_logger.add_message("Trying sequential processing...")
-            processed_articles = agent.process_multiple_articles(all_articles[:5], preview=False)
+            processed_articles = agent.process_multiple_articles(all_articles[:10], preview=False)
         
         if not processed_articles:
             raise Exception("No articles were successfully processed")
@@ -108,8 +108,8 @@ def run_scraping_task(selected_tags):
         web_logger.add_message(f"Successfully processed {len(processed_articles)} articles")
         
         # Step 3: Generate PDF
-        scraping_status['current_step'] = 'Generating PDF report...'
-        scraping_status['progress'] = 70
+        scraping_status['current_step'] = 'Generating comprehensive PDF report...'
+        scraping_status['progress'] = 80
         
         try:
             pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=False)
@@ -118,13 +118,13 @@ def run_scraping_task(selected_tags):
             web_logger.add_message(f"PDF generation failed: {str(e)}")
             pdf_path = None
         
-        # Step 4: Generate website
-        scraping_status['current_step'] = 'Generating website...'
-        scraping_status['progress'] = 85
+        # Step 4: Generate searchable website
+        scraping_status['current_step'] = 'Generating searchable website...'
+        scraping_status['progress'] = 90
         
         try:
             website_path = agent.generate_website(processed_articles, pdf_path, preview=False)
-            web_logger.add_message(f"Website generated: {website_path}")
+            web_logger.add_message(f"Interactive website generated: {website_path}")
         except Exception as e:
             web_logger.add_message(f"Website generation failed: {str(e)}")
             website_path = None
@@ -137,9 +137,11 @@ def run_scraping_task(selected_tags):
             'processed_articles': len(processed_articles),
             'pdf_path': pdf_path,
             'website_path': website_path,
-            'selected_tags': selected_tags
+            'tags_scraped': ALL_TAGS,
+            'articles_by_tag': {tag: len([a for a in all_articles if a['tab'] == tag]) for tag in ALL_TAGS}
         }
-        web_logger.add_message("Scraping completed successfully!")
+        web_logger.add_message("Comprehensive scraping completed successfully!")
+        web_logger.add_message("You can now filter and search through all articles on the website!")
         
     except Exception as e:
         scraping_status['error'] = str(e)
@@ -151,23 +153,19 @@ def run_scraping_task(selected_tags):
 
 @app.route('/')
 def index():
-    """Main page with tag selection"""
+    """Main page - start comprehensive scraping"""
     return render_template('index.html', 
-                         available_tags=AVAILABLE_TAGS,
+                         all_tags=ALL_TAGS,
                          scraping_status=scraping_status)
 
 @app.route('/start_scraping', methods=['POST'])
 def start_scraping():
-    """Start the scraping process with selected tags"""
+    """Start the comprehensive scraping process"""
     if scraping_status['is_running']:
         return jsonify({'error': 'Scraping is already running'}), 400
     
-    selected_tags = request.json.get('tags', [])
-    if not selected_tags:
-        return jsonify({'error': 'No tags selected'}), 400
-    
-    # Start scraping in background thread
-    thread = threading.Thread(target=run_scraping_task, args=(selected_tags,))
+    # Start scraping all tags in background thread
+    thread = threading.Thread(target=run_scraping_task)
     thread.daemon = True
     thread.start()
     
@@ -199,5 +197,7 @@ def view_website():
         return jsonify({'success': True, 'message': 'Website opened in browser'})
     return jsonify({'error': 'No website available'}), 404
 
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=5000, debug=True)
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
