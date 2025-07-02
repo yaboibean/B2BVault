@@ -623,81 +623,81 @@ def prepare_netlify_deployment():
                 return;
             }}
             
-            const tagsParam = selectedTags.join(',');
-            const command = `python3 B2Bscraper.py --tags="${{tagsParam}}" --generate-netlify`;
+            // Show loading state
+            const commandOutput = document.getElementById('commandOutput');
+            commandOutput.style.display = 'block';
+            document.getElementById('commandText').innerHTML = '<div style="text-align: center;">🚀 Starting scraper... Please wait...</div>';
             
-            document.getElementById('commandText').textContent = command;
-            document.getElementById('commandOutput').style.display = 'block';
-        }}
-        
-        function selectText(element) {{
-            const range = document.createRange();
-            range.selectNodeContents(element);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }}
-        
-        function showUpdateInstructions() {{
-            alert(`🔄 To update your dashboard:
-
-1. Generate a command using this tool
-2. Run it locally: python3 B2Bscraper.py --tags="YourTags"
-3. Run: python3 prepare_netlify_deployment.py
+            // Call Netlify function to run scraper
+            fetch('/.netlify/functions/scrape', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json'
+                }},
+                body: JSON.stringify({{ tags: selectedTags }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    document.getElementById('commandText').innerHTML = `
+                        <div style="color: #27ae60;">✅ Scraping completed successfully!</div>
+1. Generate a command using this toolargin-top: 10px; font-size: 0.9rem;">
+2. Run it locally: python3 B2Bscraper.py --tags="YourTags"ith new articles.<br>
+3. Run: python3 prepare_netlify_deployment.py="color: #3498db;">🔄 Refresh the dashboard</a> to see the new content.
 4. Upload netlify_site folder to Netlify
 5. Your dashboard will be updated!`);
-        }}
-        
-        // Local storage functions for history
-        function saveSelection() {{
+        }}      }} else {{
+                    document.getElementById('commandText').innerHTML = `
+        // Local storage functions for history4c3c;">❌ Scraping failed: ${{data.error}}</div>
+        function saveSelection() {{"margin-top: 10px; font-size: 0.9rem;">
             const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
                 .map(cb => cb.value);
-            
+                    `;
             if (selectedTags.length === 0) {{
                 alert('Please select at least one category to save');
-                return;
-            }}
-            
-            const selection = {{
-                tags: selectedTags,
+                return;r => {{
+            }}  document.getElementById('commandText').innerHTML = `
+                    <div style="color: #e74c3c;">❌ Error: ${{error.message}}</div>
+            const selection = {{margin-top: 10px; font-size: 0.9rem;">
+                tags: selectedTags,internet connection and try again.
                 timestamp: new Date().toISOString(),
                 date: new Date().toLocaleDateString()
-            }};
+            }};;
             
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             history.unshift(selection);
-            
-            if (history.length > 10) {{
-                history.splice(10);
-            }}
-            
+            const range = document.createRange();
+            if (history.length > 10) {{ement);
+                history.splice(10);w.getSelection();
+            }}lection.removeAllRanges();
+            selection.addRange(range);
             localStorage.setItem('b2bVaultHistory', JSON.stringify(history));
             alert('Selection saved to history!');
-        }}
-        
+        }}nction showUpdateInstructions() {{
+            alert(`🔄 To update your dashboard:
         function loadHistory() {{
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             const historyList = document.getElementById('historyList');
-            
+            on3 prepare_netlify_deployment.py
             if (history.length === 0) {{
                 historyList.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No previous selections saved</p>';
                 return;
             }}
-            
+            ocal storage functions for history
             historyList.innerHTML = history.map((item, index) => `
-                <div class="history-item">
-                    <div>
+                <div class="history-item">m(document.querySelectorAll('.tag-checkbox:checked'))
+                    <div>> cb.value);
                         <strong>${{item.date}}</strong>
                         <div class="history-tags">${{item.tags.join(', ')}}</div>
-                    </div>
+                    </div>ase select at least one category to save');
                     <div>
                         <button class="btn btn-secondary btn-small" onclick="loadSelection(${{index}})">🔄 Load</button>
                         <button class="btn btn-primary btn-small" onclick="generateFromHistory(${{index}})">▶️ Generate</button>
-                    </div>
-                </div>
-            `).join('');
-        }}
-        
+                    </div>n = {{
+                </div>selectedTags,
+            `).join('');p: new Date().toISOString(),
+        }}      date: new Date().toLocaleDateString()
+            }};
         function loadSelection(index) {{
             const history = JSON.parse(localStorage.getItem('b2bVaultHistory') || '[]');
             if (!history[index]) return;
@@ -756,28 +756,28 @@ def prepare_netlify_deployment():
     print("✅ Creating Netlify configuration...")
     
     netlify_toml = """[build]
-      publish = "."
-    
-    [[redirects]]
-      from = "/scraper"
-      to = "/scraper.html"
-      status = 301
-    
-    [[redirects]]
-      from = "/dashboard"
-      to = "/index.html"
-      status = 301
-    
-    [[redirects]]
-      from = "/api/*"
-      to = "/404.html"
-      status = 404
-    
-    [[redirects]]
-      from = "/*"
-      to = "/index.html"
-      status = 200
-    """
+  publish = "."
+  functions = "netlify/functions"
+
+[build.environment]
+  PYTHON_VERSION = "3.8"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+
+[[redirects]]
+  from = "/scraper"
+  to = "/scraper.html"
+  status = 301
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/index.html"
+  status = 301"""
     with open(os.path.join(netlify_site_dir, "netlify.toml"), "w") as f:
             f.write(netlify_toml)
     

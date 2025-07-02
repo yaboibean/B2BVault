@@ -566,6 +566,77 @@ def index():
                     document.getElementById('startBtn').disabled = false;
                     document.getElementById('progressContainer').style.display = 'none';
                 } else {
+        function clearAll() {
+            const checkboxes = document.querySelectorAll('.tag-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+        
+        function getSelectedTags() {
+            const checkboxes = document.querySelectorAll('.tag-checkbox:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.innerHTML = message;
+            successDiv.style.display = 'block';
+        }
+        
+        function updateProgress(progress, message) {
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('progressText').textContent = message;
+        }
+        
+        function updateLogs(messages) {
+            const logDiv = document.getElementById('logMessages');
+            logDiv.innerHTML = messages.map(msg => 
+                `<div class="log-message">[${msg.timestamp}] ${msg.message}</div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function startScraping() {
+            const selectedTags = getSelectedTags();
+            
+            if (selectedTags.length === 0) {
+                showError('Please select at least one category to scrape.');
+                return;
+            }
+            
+            // Show encouragement for complete scraping
+            if (selectedTags.includes('All')) {
+                updateProgress(5, 'Excellent choice! Preparing to scrape all B2B Vault content...');
+            }
+            
+            // Disable button and show progress
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('logContainer').style.display = 'block';
+            
+            // Start scraping
+            fetch('/start_scraping', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tags: selectedTags })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('progressContainer').style.display = 'none';
+                } else {
                     // Start polling for status
                     pollingInterval = setInterval(pollStatus, 1000);
                 }
@@ -597,11 +668,12 @@ def index():
                                  `All categories (${data.results.filtered_tags.length} total)` : 
                                  data.results.selected_tags.join(', ');
                     showSuccess(`
-                        🎉 Scraping completed successfully!<br>
+                        🎉 Complete scraping finished successfully!<br>
                         📊 Processed ${data.results.processed_articles}/${data.results.total_articles} articles<br>
                         📑 Categories: ${tags}<br>
                         <br>
-                        <a href="/results" style="color: white; text-decoration: underline;">View Results</a>
+                        <strong>🌐 Your complete B2B Vault library is ready!</strong><br>
+                        <a href="/results" style="color: white; text-decoration: underline; font-weight: bold;">View Your Complete Content Library →</a>
                     `);
                     document.getElementById('startBtn').disabled = false;
                 }

@@ -665,7 +665,24 @@
             const savedTags = history[index].tags;
             savedTags.forEach(tag => {
                 const checkbox = document.querySelector(`input[value="${tag}"]`);
-                if
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+            
+            switchTab('command');
+            alert('Selection loaded! You can now generate the command.');
+        }
+        
+        function generateFromHistory(index) {
+            loadSelection(index);
+            setTimeout(() => {
+                generateCommand();
+            }, 100);
+        }
+        
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all saved selections?')) {
                 localStorage.removeItem('b2bVaultHistory');
                 loadHistory();
             }
