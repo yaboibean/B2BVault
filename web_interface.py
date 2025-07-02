@@ -318,102 +318,108 @@ def process_articles_and_generate_outputs(agent, all_articles, tags_used):
     web_logger.add_message("Processing completed successfully!")
     web_logger.add_message("You can now filter and search through all articles on the website!")
 
+def run_comprehensive_scraping():
+    """Run comprehensive scraping of ALL B2B Vault articles"""
+    global scraping_status, web_logger
+    
+    try:
+        scraping_status['is_running'] = True
+        scraping_status['progress'] = 0
+        scraping_status['current_step'] = 'Initializing comprehensive scraping...'
+        scraping_status['error'] = None
+        scraping_status['log_messages'] = []
+        web_logger.messages = []
+        
+        web_logger.add_message("🚀 Starting comprehensive B2B Vault scraping")
+        web_logger.add_message("📊 Will collect ALL articles from ALL categories")
+        
+        # Initialize agent for comprehensive scraping
+        agent = B2BVaultAgent(max_workers=5)
+        
+        # Step 1: Collect ALL articles
+        scraping_status['current_step'] = 'Discovering and collecting ALL articles...'
+        scraping_status['progress'] = 10
+        web_logger.add_message(f"📂 Scanning {len(agent.tabs_to_search)} categories...")
+        
+        all_articles = agent.scrape_all_articles(preview=False)
+        
+        if not all_articles:
+            raise Exception("No articles found across all categories")
+        
+        web_logger.add_message(f"✅ Collected {len(all_articles)} total articles")
+        web_logger.add_message(f"📂 From {len(set(a['tab'] for a in all_articles))} categories")
+        web_logger.add_message(f"📰 From {len(set(a['publisher'] for a in all_articles))} publishers")
+        
+        # Step 2: Process ALL articles
+        scraping_status['current_step'] = 'Processing ALL articles with AI...'
+        scraping_status['progress'] = 40
+        
+        processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
+        
+        if not processed_articles:
+            raise Exception("No articles were successfully processed")
+        
+        web_logger.add_message(f"🤖 Successfully processed {len(processed_articles)} articles")
+        
+        # Step 3: Generate comprehensive outputs
+        scraping_status['current_step'] = 'Generating comprehensive PDF report...'
+        scraping_status['progress'] = 80
+        
+        pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=False)
+        web_logger.add_message(f"📄 Generated comprehensive PDF report")
+        
+        # Step 4: Generate advanced website
+        scraping_status['current_step'] = 'Building advanced website with filtering...'
+        scraping_status['progress'] = 90
+        
+        website_path = agent.generate_advanced_website(processed_articles, pdf_path, preview=False)
+        web_logger.add_message(f"🌐 Generated advanced website with filtering")
+        
+        # Complete
+        scraping_status['current_step'] = 'Complete!'
+        scraping_status['progress'] = 100
+        scraping_status['results'] = {
+            'total_articles': len(all_articles),
+            'processed_articles': len(processed_articles),
+            'pdf_path': pdf_path,
+            'website_path': website_path,
+            'categories_count': len(set(a['tab'] for a in all_articles)),
+            'publishers_count': len(set(a['publisher'] for a in all_articles)),
+            'articles_by_category': {cat: len([a for a in all_articles if a['tab'] == cat]) 
+                                   for cat in set(a['tab'] for a in all_articles)}
+        }
+        web_logger.add_message("🎉 Comprehensive scraping completed successfully!")
+        web_logger.add_message(f"📊 Final stats: {len(processed_articles)} articles processed")
+        
+    except Exception as e:
+        scraping_status['error'] = str(e)
+        scraping_status['current_step'] = f'Error: {str(e)}'
+        web_logger.add_message(f"❌ ERROR: {str(e)}")
+    finally:
+        scraping_status['is_running'] = False
+        scraping_status['log_messages'] = web_logger.messages
+
 @app.route('/')
 def index():
-    """Main page with tag selection and cache info."""
-    cache_info = get_cache_info()
-    cached_data_available = cache_info is not None
-    
-    return render_template('index.html', 
-                         available_tags=ALL_TAGS,
-                         scraping_status=scraping_status,
-                         cached_data_available=cached_data_available,
-                         cache_date=cache_info.get('date', '') if cache_info else '',
-                         cached_articles_count=cache_info.get('article_count', 0) if cache_info else 0)
+    """Main page for comprehensive scraping."""
+    return render_template('index_comprehensive.html', scraping_status=scraping_status)
 
-@app.route('/start_scraping', methods=['POST'])
-def start_scraping():
-    """Start the scraping process with selected tags"""
+@app.route('/start_comprehensive_scraping', methods=['POST'])
+def start_comprehensive_scraping():
+    """Start comprehensive scraping of ALL articles"""
     if scraping_status['is_running']:
         return jsonify({'error': 'Scraping is already running'}), 400
     
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-            
-        selected_tags = data.get('tags', [])
-        if not selected_tags:
-            return jsonify({'error': 'No tags selected'}), 400
-        
-        # Start scraping in background thread
-        thread = threading.Thread(target=run_scraping_task, args=(selected_tags,))
+        # Start comprehensive scraping in background thread
+        thread = threading.Thread(target=run_comprehensive_scraping)
         thread.daemon = True
         thread.start()
         
         return jsonify({'success': True})
         
     except Exception as e:
-        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
-
-@app.route('/status')
-def get_status():
-    """Get current scraping status"""
-    return jsonify(scraping_status)
-
-@app.route('/results')
-def view_results():
-    """View the results page"""
-    if not scraping_status['results']:
-        return redirect(url_for('index'))
-    return render_template('results.html', results=scraping_status['results'])
-
-@app.route('/view_website')
-def view_website():
-    """Redirect to the generated website"""
-    if scraping_status['results'] and scraping_status['results']['website_path']:
-        website_dir = os.path.dirname(scraping_status['results']['website_path'])
-        # Start a simple server for the website
-        import subprocess
-        import webbrowser
-        
-        # Open the website in browser
-        webbrowser.open('http://localhost:8001')
-        return jsonify({'success': True, 'message': 'Website opened in browser'})
-    return jsonify({'error': 'No website available'}), 404
-
-@app.route('/get_cached_tags')
-def get_cached_tags():
-    """Get available tags from cached data."""
-    cache_info = get_cache_info()
-    if cache_info:
-        return jsonify({'tags': cache_info.get('tags', [])})
-    return jsonify({'error': 'No cached data available'}), 404
-
-@app.route('/process_cached', methods=['POST'])
-def process_cached():
-    """Process cached data for selected tags."""
-    if scraping_status['is_running']:
-        return jsonify({'error': 'Processing is already running'}), 400
-    
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-            
-        selected_tags = data.get('tags', [])
-        if not selected_tags:
-            return jsonify({'error': 'No tags selected'}), 400
-        
-        # Start processing cached data in background thread
-        thread = threading.Thread(target=run_cached_processing_task, args=(selected_tags,))
-        thread.daemon = True
-        thread.start()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
+        return jsonify({'error': f'Error starting scraping: {str(e)}'}), 400
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)

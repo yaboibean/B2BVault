@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 B2B Vault Scraper</title>
+    <title>🚀 B2B Vault Comprehensive Scraper</title>
     <style>
         * {
             margin: 0;
@@ -43,72 +43,18 @@
             font-size: 1.1rem;
         }
         
-        .tag-selection {
-            margin-bottom: 30px;
-        }
-        
-        .tag-selection h2 {
-            color: #34495e;
-            margin-bottom: 20px;
-            font-size: 1.3rem;
-        }
-        
-        .tags-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .tag-checkbox {
-            display: none;
-        }
-        
-        .tag-label {
-            display: block;
-            padding: 15px 20px;
+        .info-box {
             background: #f8f9fa;
-            border: 2px solid #e9ecef;
             border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-        
-        .tag-label:hover {
-            background: #e9ecef;
-            transform: translateY(-2px);
-        }
-        
-        .tag-checkbox:checked + .tag-label {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        
-        .quick-actions {
-            display: flex;
-            gap: 15px;
+            padding: 20px;
             margin-bottom: 30px;
-            justify-content: center;
-            flex-wrap: wrap;
+            border: 1px solid #e9ecef;
         }
         
-        .quick-btn {
-            padding: 10px 20px;
-            border: 2px solid #95a5a6;
-            background: white;
-            color: #95a5a6;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-        }
-        
-        .quick-btn:hover {
-            background: #95a5a6;
-            color: white;
+        .info-box h3 {
+            color: #34495e;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
         }
         
         .controls {
@@ -213,35 +159,28 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 B2B Vault Scraper</h1>
-            <p>Select the tags you want to scrape from B2B Vault and generate AI-powered insights</p>
+            <h1>🚀 B2B Vault Comprehensive Scraper</h1>
+            <p>Automatically scrape and analyze ALL articles from B2B Vault with advanced filtering</p>
         </div>
         
-        <div class="tag-selection">
-            <h2>📂 Select Tags to Scrape:</h2>
-            
-            <div class="quick-actions">
-                <button class="quick-btn" onclick="selectAll()">Select All</button>
-                <button class="quick-btn" onclick="clearAll()">Clear All</button>
-            </div>
-            
-            <div class="tags-grid">
-                {% for tag in available_tags %}
-                <div>
-                    <input type="checkbox" id="tag-{{ loop.index }}" class="tag-checkbox" value="{{ tag }}">
-                    <label for="tag-{{ loop.index }}" class="tag-label">{{ tag }}</label>
-                </div>
-                {% endfor %}
-            </div>
+        <div class="info-box">
+            <h3>🎯 What This Will Do:</h3>
+            <ul>
+                <li>📊 Scrape <strong>ALL articles</strong> from ALL categories on B2B Vault</li>
+                <li>🤖 Process each article with AI to generate summaries and insights</li>
+                <li>🌐 Create an advanced website with powerful filtering and search</li>
+                <li>📄 Generate a comprehensive PDF report with all findings</li>
+                <li>🔍 Build filters by category, publisher, date, content type, and more</li>
+            </ul>
         </div>
         
         <div class="controls">
-            <button id="startBtn" class="btn btn-primary" onclick="startScraping()" 
+            <button id="startBtn" class="btn btn-primary" onclick="startComprehensiveScraping()" 
                     {% if scraping_status.is_running %}disabled{% endif %}>
                 {% if scraping_status.is_running %}
-                    🔄 Scraping in Progress...
+                    🔄 Comprehensive Scraping in Progress...
                 {% else %}
-                    🚀 Start Scraping
+                    🚀 Start Comprehensive Scraping
                 {% endif %}
             </button>
         </div>
@@ -250,7 +189,6 @@
              {% if scraping_status.is_running %}style="display: block;"{% endif %}>
             <div class="progress-bar">
                 <div id="progressFill" class="progress-fill" 
-                    ></div>
             </div>
             <div id="progressText" class="progress-text">{{ scraping_status.current_step }}</div>
         </div>
@@ -271,86 +209,36 @@
     <script>
         let pollingInterval;
         
-        function getSelectedTags() {
-            const checkboxes = document.querySelectorAll('.tag-checkbox:checked');
-            return Array.from(checkboxes).map(cb => cb.value);
-        }
-        
-        function selectAll() {
-            document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = true);
-        }
-        
-        function clearAll() {
-            document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = false);
-        }
-        
-        function showError(message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.innerHTML = message;
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 5000);
-        }
-        
-        function showSuccess(message) {
-            const successDiv = document.getElementById('successMessage');
-            successDiv.innerHTML = message;
-            successDiv.style.display = 'block';
-        }
-        
-        function updateProgress(progress, message) {
-            document.getElementById('progressFill').style.width = progress + '%';
-            document.getElementById('progressText').textContent = message;
-        }
-        
-        function updateLogs(messages) {
-            const logDiv = document.getElementById('logMessages');
-            logDiv.innerHTML = messages.map(msg => 
-                `<div class="log-message">[${msg.timestamp}] ${msg.message}</div>`
-            ).join('');
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-        
-        function startScraping() {
-            const selectedTags = getSelectedTags();
-            
-            if (selectedTags.length === 0) {
-                showError('Please select at least one tag to scrape.');
-                return;
-            }
-            
+        function startComprehensiveScraping() {
             // Disable button and show progress
             document.getElementById('startBtn').disabled = true;
-            document.getElementById('startBtn').textContent = '🔄 Starting...';
+            document.getElementById('startBtn').textContent = '🔄 Starting Comprehensive Scraping...';
             document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('logContainer').style.display = 'block';
             
-            // Start scraping
-            fetch('/start_scraping', {
+            // Start comprehensive scraping
+            fetch('/start_comprehensive_scraping', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ tags: selectedTags })
+                }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     showError(data.error);
                     document.getElementById('startBtn').disabled = false;
-                    document.getElementById('startBtn').textContent = '🚀 Start Scraping';
+                    document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
                     document.getElementById('progressContainer').style.display = 'none';
                 } else {
-                    document.getElementById('startBtn').textContent = '🔄 Scraping in Progress...';
-                    // Start polling for status
-                    pollingInterval = setInterval(pollStatus, 1000);
+                    document.getElementById('startBtn').textContent = '🔄 Comprehensive Scraping in Progress...';
+                    pollingInterval = setInterval(pollStatus, 2000);
                 }
             })
             .catch(error => {
                 showError('Failed to start scraping: ' + error);
                 document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').textContent = '🚀 Start Scraping';
+                document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
                 document.getElementById('progressContainer').style.display = 'none';
             });
         }
@@ -369,7 +257,7 @@
                     clearInterval(pollingInterval);
                     showError(data.error);
                     document.getElementById('startBtn').disabled = false;
-                    document.getElementById('startBtn').textContent = '🚀 Start Scraping';
+                    document.getElementById('startBtn').textContent = '🚀 Start Comprehensive Scraping';
                 } else if (!data.is_running && data.results) {
                     clearInterval(pollingInterval);
                     showSuccess(`

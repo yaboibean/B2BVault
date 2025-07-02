@@ -92,15 +92,62 @@ def safe_get_publisher(card):
 class B2BVaultAgent:
     """B2B Vault scraper and analyzer."""
     
-    def __init__(self, output_dir: str = "scraped_data", tabs_to_search: List[str] = ["Sales"], max_workers: int = 5):
+    def __init__(self, output_dir: str = "scraped_data", max_workers: int = 5):
         self.output_dir = output_dir
-        self.tabs_to_search = tabs_to_search
+        # Get ALL available tabs automatically
+        self.tabs_to_search = self.get_all_available_tabs()
         self.max_workers = max_workers
         os.makedirs(output_dir, exist_ok=True)
         self.logger = logging.getLogger(__name__)
 
+    def get_all_available_tabs(self):
+        """Automatically discover all available tabs on B2B Vault."""
+        all_tabs = [
+            "Content Marketing", "Demand Generation", "ABM & GTM", "Paid Marketing",
+            "Marketing Ops", "Event Marketing", "AI", "Product Marketing", "Sales",
+            "General", "Affiliate & Partnerships", "Copy & Positioning", "Leadership",
+            "Strategy", "Customer Success", "Operations", "Finance", "HR", "Technology"
+        ]
+        return all_tabs
+
+    def scrape_all_articles(self, preview: bool = False):
+        """Scrape ALL articles from ALL tabs on B2B Vault."""
+        if preview:
+            print("🌐 Starting comprehensive B2B Vault scraping...")
+            print(f"📂 Will scrape from {len(self.tabs_to_search)} categories")
+        
+        all_articles = []
+        successful_tabs = []
+        
+        for i, tab_name in enumerate(self.tabs_to_search):
+            if preview:
+                print(f"\n📑 [{i+1}/{len(self.tabs_to_search)}] Scraping {tab_name}...")
+            
+            try:
+                tab_articles = self.navigate_to_tab_and_get_articles(tab_name, preview)
+                if tab_articles:
+                    all_articles.extend(tab_articles)
+                    successful_tabs.append(tab_name)
+                    if preview:
+                        print(f"   ✅ Found {len(tab_articles)} articles in {tab_name}")
+                else:
+                    if preview:
+                        print(f"   ⚠️ No articles found in {tab_name}")
+            except Exception as e:
+                if preview:
+                    print(f"   ❌ Error scraping {tab_name}: {e}")
+                continue
+        
+        if preview:
+            print(f"\n🎯 Scraping Summary:")
+            print(f"   📊 Total articles collected: {len(all_articles)}")
+            print(f"   ✅ Successful tabs: {len(successful_tabs)}")
+            print(f"   📂 Categories: {', '.join(successful_tabs)}")
+        
+        return all_articles
+
     def navigate_to_tab_and_get_articles(self, tab_name: str, preview: bool = False):
-        """Navigate to tab and collect article URLs."""
+        """Navigate to tab and collect ALL article URLs (no limits)."""
         articles = []
         seen_urls = set()
         
@@ -109,36 +156,48 @@ class B2BVaultAgent:
             page = browser.new_page()
             
             try:
-                if preview:
-                    print(f"🌐 Opening {BASE_URL} - {tab_name} tab")
-                
-                page.goto(BASE_URL, timeout=20000)
-                page.wait_for_timeout(500)
+                page.goto(BASE_URL, timeout=30000)
+                page.wait_for_timeout(1000)
                 
                 # Navigate to tab
-                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=5000)
+                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=10000)
                 tab = page.locator(f"a[data-w-tab='{tab_name}']")
                 tab.click()
-                page.wait_for_timeout(1000)
-                
-                # Fast scroll to load content
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(2000)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(1000)
                 
-                # Process cards
+                # Aggressive scrolling to load ALL content
+                previous_count = 0
+                scroll_attempts = 0
+                max_scroll_attempts = 20
+                
+                while scroll_attempts < max_scroll_attempts:
+                    # Scroll to bottom
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(3000)
+                    
+                    # Check if more content loaded
+                    current_count = page.locator("div.w-dyn-item").count()
+                    if current_count == previous_count:
+                        scroll_attempts += 1
+                    else:
+                        scroll_attempts = 0  # Reset if new content loaded
+                        previous_count = current_count
+                    
+                    if preview and scroll_attempts == 0:
+                        print(f"      📄 Loaded {current_count} items so far...")
+                
+                # Process ALL cards
                 cards = page.locator("div.w-dyn-item")
-                count = cards.count()
+                total_count = cards.count()
                 
                 if preview:
-                    print(f"🔍 Found {count} cards, filtering for {tab_name} articles...")
+                    print(f"      🔍 Processing {total_count} total cards...")
                 
-                for i in range(count):
+                for i in range(total_count):
                     try:
                         card = cards.nth(i)
                         
-                        # Check if article matches tab
+                        # Check if article matches current tab
                         is_target_article = False
                         try:
                             tag_elements = card.locator("div.text-block-3").all()
@@ -175,16 +234,11 @@ class B2BVaultAgent:
                                 "tab": tab_name,
                                 "scraped_at": time.strftime('%Y-%m-%d %H:%M:%S')
                             })
-                            
-                            if preview and len(articles) <= 10:
-                                print(f"   📰 Article {len(articles)}: {title[:40]}...")
                     except Exception as e:
-                        if preview:
-                            print(f"   ⚠️ Error processing card {i}: {e}")
                         continue
                 
                 if preview:
-                    print(f"✅ Collected {len(articles)} unique {tab_name} articles")
+                    print(f"      ✅ Collected {len(articles)} unique {tab_name} articles")
                 
             except Exception as e:
                 self.logger.error(f"Error navigating to {tab_name} tab: {e}")
@@ -799,55 +853,55 @@ class B2BVaultAgent:
         
         return html_path
 
-# Command line interface for direct usage
+# Command line interface for comprehensive scraping
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='B2B Vault Comprehensive Scraper')
-    parser.add_argument('--tags', type=str, default='Sales,Marketing,Growth,Product,Leadership,Strategy', 
-                        help='Comma-separated list of tags to scrape (default: all main tags)')
+    parser = argparse.ArgumentParser(description='B2B Vault Comprehensive Scraper - Scrapes ALL articles')
     parser.add_argument('--preview', action='store_true', help='Show preview output')
+    parser.add_argument('--limit', type=int, default=None, help='Limit number of articles to process (for testing)')
     args = parser.parse_args()
     
-    # Parse tags
-    if args.tags.lower() == 'all':
-        tags = ["Sales", "Marketing", "Growth", "Product", "Leadership", "Strategy", "Customer Success", "Operations", "Finance", "HR", "Technology"]
-    else:
-        tags = [tag.strip() for tag in args.tags.split(',')]
+    print("🚀 Starting COMPREHENSIVE B2B Vault scraping (ALL articles)")
+    print("📊 This will scrape every available article from B2B Vault")
     
-    print(f"🚀 Starting B2B Vault scraper for tags: {', '.join(tags)}")
+    # Initialize and run comprehensive scraping
+    agent = B2BVaultAgent(max_workers=5)
     
-    # Initialize and run
-    agent = B2BVaultAgent(tabs_to_search=tags, max_workers=3)
+    # Collect ALL articles from ALL tabs
+    print(f"\n📑 Collecting articles from ALL categories...")
+    all_articles = agent.scrape_all_articles(preview=args.preview)
     
-    # Collect articles
-    all_articles = []
-    for tag in tags:
-        print(f"\n📑 Scraping {tag} articles...")
-        tag_articles = agent.navigate_to_tab_and_get_articles(tag, preview=args.preview)
-        all_articles.extend(tag_articles)
-        print(f"   Found {len(tag_articles)} articles")
-    
-    print(f"\n📊 Total articles found: {len(all_articles)}")
-    
-    if all_articles:
-        # Process articles
-        print(f"\n🤖 Processing articles with AI...")
-        processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=args.preview)
-        print(f"   Successfully processed: {len(processed_articles)} articles")
-        
-        if processed_articles:
-            # Generate outputs
-            print(f"\n📄 Generating PDF report...")
-            pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
-            
-            print(f"\n🌐 Generating website...")
-            website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
-            
-            print(f"\n✅ Scraping complete!")
-            print(f"   📄 PDF: {pdf_path}")
-            print(f"   🌐 Website: {website_path}")
-        else:
-            print("❌ No articles were successfully processed")
-    else:
+    if not all_articles:
         print("❌ No articles found")
+        exit(1)
+    
+    # Apply limit if specified (for testing)
+    if args.limit:
+        all_articles = all_articles[:args.limit]
+        print(f"⚠️ Limited to {len(all_articles)} articles for testing")
+    
+    print(f"\n📊 Total articles collected: {len(all_articles)}")
+    
+    # Process ALL articles
+    print(f"\n🤖 Processing ALL articles with AI analysis...")
+    processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=args.preview)
+    print(f"   Successfully processed: {len(processed_articles)} articles")
+    
+    if processed_articles:
+        # Generate comprehensive outputs
+        print(f"\n📄 Generating comprehensive PDF report...")
+        pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
+        
+        print(f"\n🌐 Generating advanced website with filtering...")
+        website_path = agent.generate_advanced_website(processed_articles, pdf_path, preview=args.preview)
+        
+        print(f"\n✅ Comprehensive scraping complete!")
+        print(f"   📊 Total articles: {len(all_articles)}")
+        print(f"   🤖 Processed articles: {len(processed_articles)}")
+        print(f"   📂 Categories: {len(set(a['tab'] for a in all_articles))}")
+        print(f"   📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
+        print(f"   📄 PDF: {pdf_path}")
+        print(f"   🌐 Website: {website_path}")
+    else:
+        print("❌ No articles were successfully processed")
