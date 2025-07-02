@@ -693,6 +693,11 @@ class B2BVaultAgent:
                     line-height: 1.6;
                     margin-bottom: 20px;
                 }}
+                .article-actions {{
+                    display: flex;
+                    gap: 15px;
+                    flex-wrap: wrap;
+                }}
                 .source-link {{
                     background: #27ae60;
                     color: white;
@@ -1390,7 +1395,8 @@ class B2BVaultAgent:
                     const article = document.getElementById('article-' + index);
                     const title = article.querySelector('.article-title').textContent;
                     const summary = article.querySelector('.summary-content').textContent;
-                    const text = `${{title}}\\n\\n${{summary}}`;
+                    const newline = '\\n\\n';
+                    const text = title + newline + summary;
                     navigator.clipboard.writeText(text);
                     event.target.textContent = '✅ Copied!';
                     setTimeout(() => {{

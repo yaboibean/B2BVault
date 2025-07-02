@@ -7,102 +7,87 @@ import shutil
 import glob
 import time
 
+netlify_site_dir = "netlify_site"
+scraped_data_dir = "scraped_data"
+
 def prepare_netlify_deployment():
-    """Prepare all files for Netlify deployment with Functions support"""
+    """Prepare all files for Netlify deployment with static tag selector"""
     
-    netlify_site_dir = "netlify_site"
-    scraped_data_dir = "scraped_data"
-    
-    print("🚀 Preparing Netlify deployment with Functions support...")
+    print("🚀 Preparing comprehensive Netlify deployment...")
     
     # Create netlify_site directory
     os.makedirs(netlify_site_dir, exist_ok=True)
     
-    # Copy netlify.toml and package.json to root for Netlify
-    if os.path.exists("netlify.toml"):
-        print("✅ netlify.toml found")
-    else:
-        print("⚠️  netlify.toml not found - Functions may not work")
-    
-    if os.path.exists("package.json"):
-        print("✅ package.json found for Node.js dependencies")
-    else:
-        print("⚠️  package.json not found - creating minimal version")
-        with open("package.json", "w") as f:
-            f.write("""{
-  "name": "b2b-vault-scraper",
-  "version": "1.0.0",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  }
-}""")
-    
-    # Check for Netlify Functions directory
-    if os.path.exists("netlify/functions"):
-        print("✅ Netlify Functions directory found")
-    else:
-        print("⚠️  Netlify Functions directory not found")
-        print("   Create netlify/functions/scrape.js for backend functionality")
-    
-    # 1. Copy the main dashboard (if exists)
+    # 1. Copy the main dashboard (if exists) - THIS IS THE KEY CHANGE
     website_dir = os.path.join(scraped_data_dir, "website")
+    dashboard_exists = False
+    
     if os.path.exists(os.path.join(website_dir, "index.html")):
-        print("✅ Copying analysis dashboard...")
+        print("✅ Copying main dashboard...")
         shutil.copy2(os.path.join(website_dir, "index.html"), 
-                    os.path.join(netlify_site_dir, "dashboard.html"))
+                    os.path.join(netlify_site_dir, "index.html"))
+        dashboard_exists = True
         
-        # Also create a main index.html that's the scraper interface
-        print("✅ Keeping scraper interface as main page...")
+        # Copy any CSS or JS files from the website
+        for file_pattern in ["*.css", "*.js"]:
+            for file_path in glob.glob(os.path.join(website_dir, file_pattern)):
+                shutil.copy2(file_path, netlify_site_dir)
+                print(f"✅ Copied: {os.path.basename(file_path)}")
+                
     else:
-        print("⚠️  No analysis dashboard found")
+        print("⚠️  No analysis dashboard found - keeping placeholder...")
+        print("   Run python3 B2Bscraper.py first to generate content")
     
-    # 2. Copy PDF files and fix links
-    fix_pdf_links_for_netlify(scraped_data_dir, netlify_site_dir)
-    
-    # 3. The main index.html should already be the scraper interface
-    if os.path.exists(os.path.join(netlify_site_dir, "index.html")):
-        print("✅ Scraper interface ready")
-        
-        # Update the scraper interface to mention dashboard if available
-        index_path = os.path.join(netlify_site_dir, "index.html")
-        with open(index_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        
-        # Add dashboard link if dashboard exists
-        if os.path.exists(os.path.join(netlify_site_dir, "dashboard.html")):
-            dashboard_link = '''
-            <div style="text-align: center; margin: 20px 0; padding: 15px; background: #d4edda; border-radius: 10px;">
-                <strong>📊 Existing Analysis Available:</strong><br>
-                <a href="./dashboard.html" style="color: #155724; text-decoration: underline; font-weight: bold;">View Analysis Dashboard</a>
-            </div>
-            '''
-            # Insert before the controls
-            html_content = html_content.replace(
-                '<div class="controls">',
-                dashboard_link + '<div class="controls">'
-            )
+    # 2. Copy PDF files
+    if os.path.exists(scraped_data_dir):
+        pdf_files = glob.glob(os.path.join(scraped_data_dir, "*comprehensive_report*.pdf"))
+        if pdf_files:
+            latest_pdf = max(pdf_files, key=os.path.getmtime)
+            dest_pdf_path = os.path.join(netlify_site_dir, os.path.basename(latest_pdf))
             
-            with open(index_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
+            try:
+                shutil.copy2(latest_pdf, dest_pdf_path)
+                print(f"✅ Copied PDF: {os.path.basename(latest_pdf)}")
+                dashboard_exists = True
+            except Exception as e:
+                print(f"❌ Error copying PDF: {e}")
     
-    print("\n🎯 NETLIFY DEPLOYMENT SUMMARY:")
-    print("   📁 Upload the entire project folder to Netlify")
-    print("   🔧 netlify.toml configures build settings")
-    print("   ⚙️  Netlify Functions provide backend functionality")
-    print("   🌐 Main scraper interface: index.html")
+    print(f"\n🎯 NETLIFY DEPLOYMENT STATUS:")
+    if dashboard_exists:
+        print("   ✅ Dashboard with analyzed articles ready!")
+        print("   📊 Main page: Analysis dashboard (index.html)")
+        print("   📄 PDF report included")
+    else:
+        print("   📋 Placeholder dashboard (no content yet)")
+        print("   💡 Run 'python3 B2Bscraper.py' to generate content")
     
-    if os.path.exists(os.path.join(netlify_site_dir, "dashboard.html")):
-        print("   📊 Analysis dashboard: dashboard.html")
-    
-    print("\n🚀 NEXT STEPS:")
-    print("   1. Push entire project to GitHub")
-    print("   2. Connect GitHub repo to Netlify")
-    print("   3. Netlify will auto-detect netlify.toml")
-    print("   4. Functions will be deployed automatically")
-    print("   5. Your scraper will be live with backend support!")
+    print("   📁 Upload netlify_site folder to your hosting platform")
 
 if __name__ == "__main__":
     prepare_netlify_deployment()
+    
+    # 3. Create enhanced static tag selector page
+    print("✅ Creating enhanced static tag selector...")
+    
+    # Get existing dashboard content for integration
+    dashboard_exists = os.path.exists(os.path.join(netlify_site_dir, "index.html"))
+    
+    # Available tags
+    available_tags = [
+        "All", "Content Marketing", "Demand Generation", "ABM & GTM",
+        "Paid Marketing", "Marketing Ops", "Event Marketing", "AI",
+        "Product Marketing", "Sales", "General", "Affiliate & Partnerships",
+        "Copy & Positioning"
+    ]
+    
+    # Start building the HTML
+    scraper_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B2B Vault Scraper - Enhanced Tag Selection</title>
+    <style>
         * {{
             margin: 0;
             padding: 0;
@@ -775,283 +760,26 @@ if __name__ == "__main__":
                 generateCommand();
             }
         };
-
-        // Advanced fuzzy search functionality
-        function fuzzySearch(searchTerm, text) {
-            // Convert to lowercase for case-insensitive search
-            const query = searchTerm.toLowerCase();
-            const target = text.toLowerCase();
-            
-            // Exact match gets highest score
-            if (target.includes(query)) {
-                return 100;
-            }
-            
-            // Handle common typos and variations
-            const correctedQuery = autoCorrect(query);
-            if (correctedQuery !== query && target.includes(correctedQuery)) {
-                return 90;
-            }
-            
-            // Split search into words for partial matching
-            const queryWords = query.split(/\s+/).filter(word => word.length > 1);
-            let score = 0;
-            let matches = 0;
-            
-            queryWords.forEach(word => {
-                if (target.includes(word)) {
-                    matches++;
-                    score += 20;
-                } else {
-                    // Check for partial word matches
-                    const partialMatch = findPartialMatch(word, target);
-                    if (partialMatch > 0.7) {
-                        matches++;
-                        score += partialMatch * 15;
-                    }
-                }
-            });
-            
-            // Bonus for matching multiple words
-            if (matches > 1) {
-                score += matches * 5;
-            }
-            
-            return score;
-        }
-        
-        function autoCorrect(word) {
-            const corrections = {
-                'markting': 'marketing',
-                'marketng': 'marketing',
-                'marekting': 'marketing',
-                'sales': 'sales',
-                'slaes': 'sales',
-                'leadgen': 'lead generation',
-                'lead gen': 'lead generation',
-                'ai': 'ai',
-                'artifiical': 'artificial',
-                'intellgence': 'intelligence',
-                'prospectng': 'prospecting',
-                'outbound': 'outbound',
-                'inbound': 'inbound',
-                'convrsion': 'conversion',
-                'converion': 'conversion',
-                'b2b': 'b2b',
-                'saas': 'saas',
-                'crm': 'crm',
-                'pipeline': 'pipeline',
-                'lead': 'lead',
-                'prospect': 'prospect',
-                'revenue': 'revenue',
-                'growth': 'growth',
-                'stratgey': 'strategy',
-                'strategy': 'strategy'
-            };
-            
-            return corrections[word] || word;
-        }
-        
-        function findPartialMatch(word, text) {
-            if (word.length < 3) return 0;
-            
-            // Check for substring matches
-            for (let i = 0; i <= text.length - word.length; i++) {
-                const substring = text.substring(i, i + word.length);
-                const similarity = calculateSimilarity(word, substring);
-                if (similarity > 0.7) return similarity;
-            }
-            
-            return 0;
-        }
-        
-        function calculateSimilarity(str1, str2) {
-            const longer = str1.length > str2.length ? str1 : str2;
-            const shorter = str1.length > str2.length ? str2 : str1;
-            
-            if (longer.length === 0) return 1.0;
-            
-            const editDistance = getEditDistance(longer, shorter);
-            return (longer.length - editDistance) / longer.length;
-        }
-        
-        function getEditDistance(str1, str2) {
-            const matrix = [];
-            
-            for (let i = 0; i <= str2.length; i++) {
-                matrix[i] = [i];
-            }
-            
-            for (let j = 0; j <= str1.length; j++) {
-                matrix[0][j] = j;
-            }
-            
-            for (let i = 1; i <= str2.length; i++) {
-                for (let j = 1; j <= str1.length; j++) {
-                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                        matrix[i][j] = matrix[i - 1][j - 1];
-                } else {
-                    matrix[i][j] = Math.min(
-                        matrix[i - 1][j - 1] + 1,
-                        matrix[i][j - 1] + 1,
-                        matrix[i - 1][j] + 1
-                    );
-                }
-            }
-        }
-        
-        return matrix[str2.length][str1.length];
-    }
+    </script>
+</body>
+</html>
+    """
     
-    function searchArticles() {
-        const searchTerm = document.querySelector('.search-input').value.trim();
-        const articles = document.querySelectorAll('.article-card');
-        const articlesGrid = document.getElementById('articles-grid');
-        
-        if (searchTerm.length === 0) {
-            // Show all articles in original order
-            articles.forEach((article, index) => {
-                article.style.display = 'block';
-                article.style.order = index;
-            });
-            return;
-        }
-        
-        const searchResults = [];
-        
-        articles.forEach((article, index) => {
-            const title = article.querySelector('.article-title').textContent;
-            const content = article.textContent;
-            const publisher = article.querySelector('.publisher')?.textContent || '';
-            const tabBadge = article.querySelector('.tab-badge')?.textContent || '';
-            
-            // Calculate relevance scores
-            const titleScore = fuzzySearch(searchTerm, title) * 3; // Weight title higher
-            const publisherScore = fuzzySearch(searchTerm, publisher) * 2;
-            const tabScore = fuzzySearch(searchTerm, tabBadge) * 2;
-            const contentScore = fuzzySearch(searchTerm, content);
-            
-            const totalScore = titleScore + publisherScore + tabScore + contentScore;
-            
-            searchResults.push({
-                element: article,
-                score: totalScore,
-                originalIndex: index
-            });
-        });
-        
-        // Sort by relevance score (highest to lowest)
-        searchResults.sort((a, b) => b.score - a.score);
-        
-        // Apply ordering and visibility
-        const threshold = 10; // Minimum score to show
-        let visibleCount = 0;
-        let displayOrder = 0;
-        
-        searchResults.forEach((result) => {
-            if (result.score >= threshold) {
-                result.element.style.display = 'block';
-                result.element.style.order = displayOrder;
-                displayOrder++;
-                visibleCount++;
-                
-                // Highlight search terms in title
-                highlightSearchTerms(result.element, searchTerm);
-                
-                // Add relevance indicator for high scores
-                if (result.score > 50) {
-                    result.element.style.borderLeftColor = '#27ae60'; // Green for highly relevant
-                } else if (result.score > 25) {
-                    result.element.style.borderLeftColor = '#f39c12'; // Orange for moderately relevant
-                } else {
-                    result.element.style.borderLeftColor = '#667eea'; // Default blue
-                }
-            } else {
-                result.element.style.display = 'none';
-            }
-        });
-        
-        // Show search suggestions if no results
-        showSearchSuggestions(searchTerm, visibleCount);
-        
-        // Add search results summary
-        showSearchSummary(searchTerm, visibleCount, searchResults.length);
-    }
+    # Save the scraper page
+    scraper_path = os.path.join(netlify_site_dir, "scraper.html")
+    with open(scraper_path, "w", encoding='utf-8') as f:
+        f.write(scraper_html)
     
-    function showSearchSummary(searchTerm, visibleCount, totalCount) {
-        let summaryDiv = document.getElementById('search-summary');
-        
-        if (!summaryDiv) {
-            summaryDiv = document.createElement('div');
-            summaryDiv.id = 'search-summary';
-            summaryDiv.style.cssText = `
-                background: #f8f9fa;
-                padding: 10px 20px;
-                border-radius: 10px;
-                margin: 10px 0;
-                text-align: center;
-                font-size: 0.9rem;
-                color: #666;
-                border-left: 4px solid #667eea;
-            `;
-            document.querySelector('.articles-grid').parentNode.insertBefore(
-                summaryDiv, 
-                document.querySelector('.articles-grid')
-            );
-        }
-        
-        if (searchTerm.length > 0) {
-            summaryDiv.style.display = 'block';
-            if (visibleCount > 0) {
-                summaryDiv.innerHTML = `
-                    🔍 Found <strong>${visibleCount}</strong> relevant articles for "<strong>${searchTerm}</strong>" 
-                    (${totalCount - visibleCount} others filtered out) • Sorted by relevance
-                `;
-            } else {
-                summaryDiv.innerHTML = `
-                    🔍 No articles found for "<strong>${searchTerm}</strong>" • Try different keywords
-                `;
-            }
-        } else {
-            summaryDiv.style.display = 'none';
-        }
-    }
+    print(f"✅ Enhanced static tag selector created: scraper.html")
+    
+    print("\n🎯 NETLIFY DEPLOYMENT READY:")
+    print("   📁 Upload netlify_site folder to Netlify")
+    if dashboard_exists:
+        print("   📊 Main page: Analysis dashboard (index.html)")
+        print("   🎯 Scraper tool: Tag selector (scraper.html)")
+    else:
+        print("   📋 Main page: Tag selector interface")
+    print("   🔧 All PDF links have been fixed for web hosting")
 
-        // Real-time search functionality
-        let searchTimeout;
-        function setupRealTimeSearch() {
-            const searchInput = document.querySelector('.search-input');
-            
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    searchArticles();
-                }, 300); // Wait 300ms after user stops typing
-            });
-            
-            // Clear search on Escape key
-            searchInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    this.value = '';
-                    searchArticles();
-                }
-            });
-        }
-        
-        // Initialize when page loads
-        window.onload = function() {
-            setupRealTimeSearch();
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const tags = urlParams.get('tags');
-            if (tags) {
-                const tagList = tags.split(',');
-                tagList.forEach(tag => {
-                    const checkbox = document.querySelector(`input[value="${tag.trim()}"]`);
-                                    if
-                                }
-                            };
-                        </script>
-                    </body>
-                    </html>
-                    """
+if __name__ == "__main__":
+    prepare_netlify_deployment()

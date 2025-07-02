@@ -249,10 +249,9 @@
         <div id="progressContainer" class="progress-container" 
              {% if scraping_status.is_running %}style="display: block;"{% endif %}>
             <div class="progress-bar">
-                <div id="progressFill" class="progress-fill" 
-                    ></div>
+                <div id="progressFill" class="progress-fill"></div>
             </div>
-            <div id="progressText" class="progress-text">{{ scraping_status.current_step }}</div>
+            <div id="progressText" class="progress-text">{{ scraping_status.current_step or 'Ready to start' }}</div>
         </div>
         
         <div id="logContainer" class="log-container" 
