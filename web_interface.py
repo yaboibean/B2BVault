@@ -7,7 +7,9 @@ import os
 import threading
 import time
 from B2Bscraper import B2BVaultAgent
+import pickle
 import json
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -54,6 +56,53 @@ class WebScrapingLogger:
 
 web_logger = WebScrapingLogger()
 
+# Cache file path
+CACHE_FILE = os.path.join("scraped_data", "articles_cache.pickle")
+CACHE_INFO_FILE = os.path.join("scraped_data", "cache_info.json")
+
+def load_cached_articles():
+    """Load cached articles from file."""
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, 'rb') as f:
+                return pickle.load(f)
+        return []
+    except Exception as e:
+        print(f"Error loading cache: {e}")
+        return []
+
+def save_articles_to_cache(articles):
+    """Save articles to cache file."""
+    try:
+        os.makedirs("scraped_data", exist_ok=True)
+        with open(CACHE_FILE, 'wb') as f:
+            pickle.dump(articles, f)
+        
+        # Save cache info
+        cache_info = {
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'article_count': len(articles),
+            'tags': list(set(a.get('tab', 'Unknown') for a in articles))
+        }
+        with open(CACHE_INFO_FILE, 'w') as f:
+            json.dump(cache_info, f)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving cache: {e}")
+        return False
+
+def get_cache_info():
+    """Get information about cached data."""
+    try:
+        if os.path.exists(CACHE_INFO_FILE):
+            with open(CACHE_INFO_FILE, 'r') as f:
+                return json.load(f)
+        return None
+    except Exception as e:
+        print(f"Error reading cache info: {e}")
+        return None
+
 def run_scraping_task(selected_tags):
     """Run the scraping task for selected tags"""
     global scraping_status, web_logger
@@ -77,9 +126,9 @@ def run_scraping_task(selected_tags):
         agent = B2BVaultAgent(tabs_to_search=tags_to_scrape, max_workers=3)
         
         # Step 1: Collect articles from selected tags
-        scraping_status['current_step'] = f'Collecting articles from {len(tags_to_scrape)} categories...'
+        scraping_status['current_step'] = f'Collecting fresh articles from {len(tags_to_scrape)} categories...'
         scraping_status['progress'] = 10
-        web_logger.add_message(f"Starting scraping for tags: {', '.join(tags_to_scrape)}")
+        web_logger.add_message(f"Starting fresh scraping for tags: {', '.join(tags_to_scrape)}")
         
         all_articles = []
         for i, tag in enumerate(tags_to_scrape):
@@ -97,6 +146,14 @@ def run_scraping_task(selected_tags):
         
         if not all_articles:
             raise Exception("No articles found for selected tags")
+        
+        # Save to cache
+        scraping_status['current_step'] = 'Saving articles to cache...'
+        scraping_status['progress'] = 45
+        if save_articles_to_cache(all_articles):
+            web_logger.add_message(f"Saved {len(all_articles)} articles to cache")
+        else:
+            web_logger.add_message("Warning: Failed to save articles to cache")
         
         web_logger.add_message(f"Total articles found: {len(all_articles)}")
         
@@ -160,12 +217,119 @@ def run_scraping_task(selected_tags):
         scraping_status['is_running'] = False
         scraping_status['log_messages'] = web_logger.messages
 
+def run_cached_processing_task(selected_tags):
+    """Process cached articles for selected tags."""
+    global scraping_status, web_logger
+    
+    try:
+        scraping_status['is_running'] = True
+        scraping_status['progress'] = 0
+        scraping_status['current_step'] = 'Loading cached data...'
+        scraping_status['error'] = None
+        scraping_status['log_messages'] = []
+        web_logger.messages = []
+        
+        # Load cached articles
+        cached_articles = load_cached_articles()
+        if not cached_articles:
+            raise Exception("No cached articles found. Please scrape fresh data first.")
+        
+        web_logger.add_message(f"Loaded {len(cached_articles)} articles from cache")
+        
+        # Filter by selected tags
+        if "All" not in selected_tags:
+            filtered_articles = [a for a in cached_articles if a.get('tab') in selected_tags]
+        else:
+            filtered_articles = cached_articles
+        
+        if not filtered_articles:
+            raise Exception(f"No cached articles found for selected tags: {', '.join(selected_tags)}")
+        
+        web_logger.add_message(f"Using {len(filtered_articles)} articles for selected tags")
+        scraping_status['progress'] = 20
+        
+        # Initialize agent for processing only
+        agent = B2BVaultAgent(tabs_to_search=selected_tags, max_workers=3)
+        
+        # Process the cached articles
+        process_articles_and_generate_outputs(agent, filtered_articles, selected_tags)
+        
+    except Exception as e:
+        scraping_status['error'] = str(e)
+        scraping_status['current_step'] = f'Error: {str(e)}'
+        web_logger.add_message(f"ERROR: {str(e)}")
+    finally:
+        scraping_status['is_running'] = False
+        scraping_status['log_messages'] = web_logger.messages
+
+def process_articles_and_generate_outputs(agent, all_articles, tags_used):
+    """Common function to process articles and generate outputs."""
+    global scraping_status, web_logger
+    
+    # Step 2: Process articles with AI
+    scraping_status['current_step'] = 'Processing articles with AI...'
+    scraping_status['progress'] = 50
+    
+    try:
+        processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
+    except Exception as e:
+        web_logger.add_message(f"Parallel processing failed: {str(e)}")
+        web_logger.add_message("Trying sequential processing...")
+        processed_articles = agent.process_multiple_articles(all_articles[:10], preview=False)
+    
+    if not processed_articles:
+        raise Exception("No articles were successfully processed")
+    
+    web_logger.add_message(f"Successfully processed {len(processed_articles)} articles")
+    
+    # Step 3: Generate PDF
+    scraping_status['current_step'] = 'Generating comprehensive PDF report...'
+    scraping_status['progress'] = 80
+    
+    try:
+        pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=False)
+        web_logger.add_message(f"PDF report generated: {os.path.basename(pdf_path)}")
+    except Exception as e:
+        web_logger.add_message(f"PDF generation failed: {str(e)}")
+        pdf_path = None
+    
+    # Step 4: Generate website
+    scraping_status['current_step'] = 'Generating searchable website...'
+    scraping_status['progress'] = 90
+    
+    try:
+        website_path = agent.generate_website(processed_articles, pdf_path, preview=False)
+        web_logger.add_message(f"Interactive website generated: {website_path}")
+    except Exception as e:
+        web_logger.add_message(f"Website generation failed: {str(e)}")
+        website_path = None
+    
+    # Complete
+    scraping_status['current_step'] = 'Complete!'
+    scraping_status['progress'] = 100
+    scraping_status['results'] = {
+        'total_articles': len(all_articles),
+        'processed_articles': len(processed_articles),
+        'pdf_path': pdf_path,
+        'website_path': website_path,
+        'tags_scraped': tags_used,
+        'articles_by_tag': {tag: len([a for a in all_articles if a['tab'] == tag]) for tag in tags_used}
+    }
+    web_logger.add_message("Processing completed successfully!")
+    web_logger.add_message("You can now filter and search through all articles on the website!")
+
 @app.route('/')
 def index():
-    """Main page with tag selection"""
+    """Main page with tag selection and cache info."""
+    cache_info = get_cache_info()
+    cached_data_available = cache_info is not None
+    
     return render_template('index.html', 
                          available_tags=ALL_TAGS,
-                         scraping_status=scraping_status)
+                         scraping_status=scraping_status,
+                         cached_data_available=cached_data_available,
+                         cache_date=cache_info.get('date', '') if cache_info else '',
+                         cached_articles_count=cache_info.get('article_count', 0) if cache_info else 0)
 
 @app.route('/start_scraping', methods=['POST'])
 def start_scraping():
@@ -217,6 +381,39 @@ def view_website():
         webbrowser.open('http://localhost:8001')
         return jsonify({'success': True, 'message': 'Website opened in browser'})
     return jsonify({'error': 'No website available'}), 404
+
+@app.route('/get_cached_tags')
+def get_cached_tags():
+    """Get available tags from cached data."""
+    cache_info = get_cache_info()
+    if cache_info:
+        return jsonify({'tags': cache_info.get('tags', [])})
+    return jsonify({'error': 'No cached data available'}), 404
+
+@app.route('/process_cached', methods=['POST'])
+def process_cached():
+    """Process cached data for selected tags."""
+    if scraping_status['is_running']:
+        return jsonify({'error': 'Processing is already running'}), 400
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        selected_tags = data.get('tags', [])
+        if not selected_tags:
+            return jsonify({'error': 'No tags selected'}), 400
+        
+        # Start processing cached data in background thread
+        thread = threading.Thread(target=run_cached_processing_task, args=(selected_tags,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': f'Invalid request: {str(e)}'}), 400
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
