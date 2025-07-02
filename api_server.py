@@ -10,7 +10,7 @@ import os
 from B2Bscraper import B2BVaultAgent
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for static site requests
+CORS(app)
 
 # Global status tracking
 scraping_status = {
@@ -32,7 +32,6 @@ def run_scraping_task(selected_tags):
         scraping_status['current_step'] = 'Initializing...'
         scraping_status['error'] = None
         
-        # Handle "All" selection
         if "All" in selected_tags:
             tags_to_scrape = ["Sales", "Marketing", "AI", "Content Marketing", "Growth"]
         else:
@@ -40,7 +39,6 @@ def run_scraping_task(selected_tags):
         
         agent = B2BVaultAgent(tabs_to_search=tags_to_scrape, max_workers=3)
         
-        # Collect articles
         scraping_status['current_step'] = 'Collecting articles...'
         scraping_status['progress'] = 20
         
@@ -49,13 +47,11 @@ def run_scraping_task(selected_tags):
             tag_articles = agent.navigate_to_tab_and_get_articles(tag, preview=False)
             all_articles.extend(tag_articles)
         
-        # Process articles
         scraping_status['current_step'] = 'Processing with AI...'
         scraping_status['progress'] = 60
         
         processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
         
-        # Generate outputs
         scraping_status['current_step'] = 'Generating reports...'
         scraping_status['progress'] = 90
         
@@ -88,7 +84,6 @@ def start_scraping():
     if not selected_tags:
         return jsonify({'error': 'No tags selected'}), 400
     
-    # Start in background thread
     thread = threading.Thread(target=run_scraping_task, args=(selected_tags,))
     thread.daemon = True
     thread.start()

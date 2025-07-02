@@ -3,12 +3,19 @@ import time
 import requests
 import logging
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
-from playwright.async_api import async_playwright
+from apscheduler.schedulers.blocking import BlockingScheduler
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from tenacity import retry, wait_exponential, stop_after_attempt, wait_fixed
 from weasyprint import HTML
+from tqdm import tqdm
+import csv
+import json
+from urllib.parse import urljoin, urlparse
+from typing import List, Dict, Optional
+import random
 import concurrent.futures
 import asyncio
-from typing import List, Dict
+from playwright.async_api import async_playwright
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,17 +23,24 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Config
 PERPLEXITY_API_KEY = "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"
 BASE_URL = "https://www.theb2bvault.com/"
+REPORT_FILENAME = "b2b_vault_report.pdf"
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def safe_get_title(card):
-    """Extract title from card element."""
+    """Safely extract title from a card element with retries."""
     try:
         all_text = card.inner_text()
         
+        # Debug: Print the raw text to see what we're working with
+        # print(f"DEBUG - Raw card text: {all_text[:200]}...")
+        
         if "Published by:" in all_text:
+            # Split on "Published by:" to get the part after publisher info
             parts = all_text.split("Published by:", 1)
             if len(parts) == 2:
                 after_published = parts[1].strip()
                 
+                # Common publishers - extract text after these
                 publishers = [
                     "ProductLed", "Growth Unhinged", "Gong", "Klue", "April Dunford", 
                     "Navattic", "Chili Piper", "Trigify", "HeyReach", "MRR Unlocked",
@@ -36,39 +50,75 @@ def safe_get_title(card):
                 
                 for publisher in publishers:
                     if after_published.startswith(publisher):
+                        # Get text after publisher name
                         title_text = after_published[len(publisher):].strip()
                         
+                        # Clean up - remove button text and descriptions
                         if "Read Full Article" in title_text:
                             title_text = title_text.split("Read Full Article")[0].strip()
                         if "Read Summary" in title_text:
                             title_text = title_text.split("Read Summary")[0].strip()
                         
+                        # Look for sentence boundaries to extract just the title
                         sentences = title_text.split('.')
                         if sentences and len(sentences[0].strip()) > 10:
                             potential_title = sentences[0].strip()
-                            if len(potential_title) < 200:
+                            if len(potential_title) < 200:  # Reasonable title length
                                 return potential_title
+                        
+                        # Fallback: take first reasonable chunk
+                        words = title_text.split()
+                        if len(words) >= 4:
+                            # Take first 10-15 words as title
+                            title_words = words[:15]
+                            title_candidate = ' '.join(title_words)
+                            if len(title_candidate) > 20 and len(title_candidate) < 200:
+                                return title_candidate
+                
+                # If no publisher match, try to extract title from the text after "Published by:"
+                # Skip the first word (likely publisher) and look for title patterns
+                words = after_published.split()
+                if len(words) > 3:
+                    # Skip first 1-2 words (publisher), then look for title
+                    for start_idx in range(1, min(3, len(words))):
+                        title_words = []
+                        for word in words[start_idx:]:
+                            if word.lower() in ['read', 'make', 'most', 'many', 'want', 'looking', 'if', 'in', 'this']:
+                                break
+                            title_words.append(word)
+                            if len(' '.join(title_words)) > 60:  # Reasonable title length
+                                break
+                        
+                        if len(title_words) >= 4:
+                            title_candidate = ' '.join(title_words)
+                            if len(title_candidate) > 15 and len(title_candidate) < 200:
+                                return title_candidate
         
-        # Fallback: find reasonable title in text
+        # Last resort: try to find text that looks like a title in the full text
         lines = all_text.split('\n')
         for line in lines:
             line = line.strip()
+            # Skip short lines, tags, and button text
             if (len(line) > 20 and len(line) < 150 and 
-                not line.lower().startswith(('copy', 'positioning', 'sales', 'published by', 'read full', 'read summary'))):
+                not line.lower().startswith(('copy', 'positioning', 'sales', 'published by', 'read full', 'read summary')) and
+                not line.lower() in ['read full article', 'read summary']):
                 return line
         
         return "Untitled Article"
-    except:
+
+    except Exception as e:
+        print(f"DEBUG TITLE - Exception: {e}")
         return "Untitled Article"
 
 def safe_get_publisher(card):
-    """Extract publisher from card element."""
+    """Safely extract publisher from a card element."""
     try:
         all_text = card.inner_text()
         
         if "Published by:" in all_text:
             after_published = all_text.split("Published by:", 1)[1].strip()
             
+            # Known publishers
             publishers = [
                 "ProductLed", "Growth Unhinged", "Gong", "Klue", "April Dunford", 
                 "Navattic", "Chili Piper", "Trigify", "HeyReach", "MRR Unlocked",
@@ -80,124 +130,107 @@ def safe_get_publisher(card):
                 if after_published.startswith(publisher):
                     return publisher
             
-            # Fallback
+            # Fallback: take first word(s) as publisher
             words = after_published.split()
             if len(words) >= 1:
-                return words[0]
+                if len(words) >= 2 and words[1][0].isupper():  # Two capitalized words
+                    return f"{words[0]} {words[1]}"
+                else:
+                    return words[0]
         
         return "Unknown Publisher"
-    except:
+        
+    except Exception as e:
+        print(f"DEBUG PUBLISHER - Exception: {e}")
         return "Unknown Publisher"
+        
+    except Exception as e:
+        print(f"DEBUG PUBLISHER - Exception: {e}")
+        pass
+    
+    return "Unknown Publisher"
 
 class B2BVaultAgent:
-    """B2B Vault scraper and analyzer."""
+    """
+    An intelligent agent that scrapes B2B Vault, analyzes content, and generates reports.
+    """
     
-    def __init__(self, output_dir: str = "scraped_data", max_workers: int = 5):
+    def __init__(self, output_dir: str = "scraped_data", tabs_to_search: List[str] = ["Sales"], max_workers: int = 5):
+        """Initialize the B2B Vault agent."""
         self.output_dir = output_dir
-        # Get ALL available tabs automatically
-        self.tabs_to_search = self.get_all_available_tabs()
-        self.max_workers = max_workers
+        self.tabs_to_search = tabs_to_search
+        self.max_workers = max_workers  # For parallel processing
         os.makedirs(output_dir, exist_ok=True)
+        
+        # Setup logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(f'{output_dir}/agent.log'),
+                logging.StreamHandler()
+            ]
+        )
         self.logger = logging.getLogger(__name__)
 
-    def get_all_available_tabs(self):
-        """Automatically discover all available tabs on B2B Vault."""
-        all_tabs = [
-            "Content Marketing", "Demand Generation", "ABM & GTM", "Paid Marketing",
-            "Marketing Ops", "Event Marketing", "AI", "Product Marketing", "Sales",
-            "General", "Affiliate & Partnerships", "Copy & Positioning", "Leadership",
-            "Strategy", "Customer Success", "Operations", "Finance", "HR", "Technology"
-        ]
-        return all_tabs
-
-    def scrape_all_articles(self, preview: bool = False):
-        """Scrape ALL articles from ALL tabs on B2B Vault."""
-        if preview:
-            print("🌐 Starting comprehensive B2B Vault scraping...")
-            print(f"📂 Will scrape from {len(self.tabs_to_search)} categories")
-        
-        all_articles = []
-        successful_tabs = []
-        
-        for i, tab_name in enumerate(self.tabs_to_search):
-            if preview:
-                print(f"\n📑 [{i+1}/{len(self.tabs_to_search)}] Scraping {tab_name}...")
-            
-            try:
-                tab_articles = self.navigate_to_tab_and_get_articles(tab_name, preview)
-                if tab_articles:
-                    all_articles.extend(tab_articles)
-                    successful_tabs.append(tab_name)
-                    if preview:
-                        print(f"   ✅ Found {len(tab_articles)} articles in {tab_name}")
-                else:
-                    if preview:
-                        print(f"   ⚠️ No articles found in {tab_name}")
-            except Exception as e:
-                if preview:
-                    print(f"   ❌ Error scraping {tab_name}: {e}")
-                continue
-        
-        if preview:
-            print(f"\n🎯 Scraping Summary:")
-            print(f"   📊 Total articles collected: {len(all_articles)}")
-            print(f"   ✅ Successful tabs: {len(successful_tabs)}")
-            print(f"   📂 Categories: {', '.join(successful_tabs)}")
-        
-        return all_articles
-
     def navigate_to_tab_and_get_articles(self, tab_name: str, preview: bool = False):
-        """Navigate to tab and collect ALL article URLs (no limits)."""
+        """Navigate to specified tab and collect article URLs with speed optimizations."""
         articles = []
         seen_urls = set()
-        
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=not preview)
+            browser = p.chromium.launch(
+                headless=not preview,
+                args=['--disable-blink-features=AutomationControlled', '--no-sandbox']  # Faster browser
+            )
             page = browser.new_page()
             
             try:
-                page.goto(BASE_URL, timeout=30000)
-                page.wait_for_timeout(1000)
+                self.logger.info(f"Navigating to B2B Vault - {tab_name} tab")
+                if preview:
+                    print(f"🌐 Opening {BASE_URL} - {tab_name} tab")
+                page.goto(BASE_URL, timeout=20000)  # Further reduced timeout
                 
-                # Navigate to tab
-                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=10000)
+                # Skip cookie handling for speed
+                page.wait_for_timeout(500)  # Minimal wait
+                
+                # Navigate to specified tab
+                self.logger.info(f"Clicking on {tab_name} tab")
+                if preview:
+                    print(f"📑 Navigating to {tab_name} tab")
+                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=5000)
                 tab = page.locator(f"a[data-w-tab='{tab_name}']")
                 tab.click()
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(1000)  # Reduced wait time
                 
-                # Aggressive scrolling to load ALL content
-                previous_count = 0
-                scroll_attempts = 0
-                max_scroll_attempts = 20
+                # Faster, aggressive scrolling
+                self.logger.info("Loading articles by scrolling")
+                if preview:
+                    print("📜 Fast scrolling to load articles...")
                 
-                while scroll_attempts < max_scroll_attempts:
-                    # Scroll to bottom
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    page.wait_for_timeout(3000)
-                    
-                    # Check if more content loaded
-                    current_count = page.locator("div.w-dyn-item").count()
-                    if current_count == previous_count:
-                        scroll_attempts += 1
-                    else:
-                        scroll_attempts = 0  # Reset if new content loaded
-                        previous_count = current_count
-                    
-                    if preview and scroll_attempts == 0:
-                        print(f"      📄 Loaded {current_count} items so far...")
+                # Scroll to bottom immediately, then check if more content loads
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(2000)  # Wait for dynamic content
                 
-                # Process ALL cards
-                cards = page.locator("div.w-dyn-item")
-                total_count = cards.count()
+                # One more scroll to catch any remaining content
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(1000)
                 
                 if preview:
-                    print(f"      🔍 Processing {total_count} total cards...")
+                    print("   ✅ Fast scroll completed")
                 
-                for i in range(total_count):
+                # Process cards with optimized extraction
+                cards = page.locator("div.w-dyn-item")
+                count = cards.count()
+                self.logger.info(f"Found {count} article cards")
+                if preview:
+                    print(f"🔍 Found {count} article cards, fast filtering for {tab_name} articles...")
+                
+                # Process all cards at once without batching for speed
+                for i in range(count):
                     try:
                         card = cards.nth(i)
                         
-                        # Check if article matches current tab
+                        # Fast tag checking
                         is_target_article = False
                         try:
                             tag_elements = card.locator("div.text-block-3").all()
@@ -212,7 +245,7 @@ class B2BVaultAgent:
                         if not is_target_article:
                             continue
                         
-                        # Get URL
+                        # Fast URL extraction
                         href = None
                         try:
                             buttons = card.locator("a.button-primary-small").all()
@@ -221,11 +254,24 @@ class B2BVaultAgent:
                         except:
                             continue
                         
+                        # Quick duplicate check and add
                         if href and href.startswith("http") and href not in seen_urls:
                             seen_urls.add(href)
                             
-                            title = safe_get_title(card)
-                            publisher = safe_get_publisher(card)
+                            # Fast title/publisher extraction
+                            try:
+                                title = safe_get_title(card)
+                                publisher = safe_get_publisher(card)
+                                
+                                # Debug output
+                                if preview and len(articles) < 5:  # Show first 5 for debugging
+                                    print(f"   DEBUG - Extracted title: '{title}'")
+                                    print(f"   DEBUG - Extracted publisher: '{publisher}'")
+                            except Exception as e:
+                                title = f"Article {len(articles) + 1} from {tab_name}"
+                                publisher = "Unknown Publisher"
+                                if preview:
+                                    print(f"   DEBUG - Title extraction failed: {e}")
 
                             articles.append({
                                 "title": title,
@@ -234,14 +280,22 @@ class B2BVaultAgent:
                                 "tab": tab_name,
                                 "scraped_at": time.strftime('%Y-%m-%d %H:%M:%S')
                             })
+                            
+                            if preview and len(articles) <= 10:  # Show fewer for speed
+                                print(f"   📰 Article {len(articles)}: {title[:40]}...")
                     except Exception as e:
+                        if preview:
+                            print(f"   ⚠️ Error processing card {i}: {e}")
                         continue
                 
+                self.logger.info(f"Collected {len(articles)} unique {tab_name} articles")
                 if preview:
-                    print(f"      ✅ Collected {len(articles)} unique {tab_name} articles")
+                    print(f"✅ Collected {len(articles)} unique {tab_name} articles")
                 
             except Exception as e:
                 self.logger.error(f"Error navigating to {tab_name} tab: {e}")
+                if preview:
+                    print(f"❌ Error navigating to {tab_name} tab: {e}")
                 raise
             finally:
                 browser.close()
@@ -249,28 +303,36 @@ class B2BVaultAgent:
         return articles
 
     async def scrape_article_content_async(self, article_url: str, browser_context) -> str:
-        """Async article content scraping."""
+        """Async version of article content scraping."""
         try:
             page = await browser_context.new_page()
-            await page.goto(article_url, timeout=20000)
-            await page.wait_for_load_state("domcontentloaded")
+            await page.goto(article_url, timeout=20000)  # Faster timeout
+            await page.wait_for_load_state("domcontentloaded")  # Don't wait for full load
             
+            # Get content faster using async
             content = await page.content()
             await page.close()
             
+            # Parse with BeautifulSoup (same logic as before)
             soup = BeautifulSoup(content, 'html.parser')
             
             # Extract title
+            title_selectors = ["h1", ".article-title", ".post-title", "title"]
             title = "Untitled"
-            for selector in ["h1", ".article-title", ".post-title", "title"]:
+            for selector in title_selectors:
                 title_elem = soup.select_one(selector)
                 if title_elem and title_elem.get_text(strip=True):
                     title = title_elem.get_text(strip=True)
                     break
             
-            # Extract body
+            # Extract article body
+            body_selectors = [
+                "article", ".article-content", ".post-content", 
+                ".content", "main", ".rich-text"
+            ]
+            
             body_text = ""
-            for selector in ["article", ".article-content", ".post-content", ".content", "main", ".rich-text"]:
+            for selector in body_selectors:
                 body_elem = soup.select_one(selector)
                 if body_elem:
                     body_text = body_elem.get_text("\n", strip=True)
@@ -287,7 +349,7 @@ class B2BVaultAgent:
             return ""
 
     async def process_articles_batch_async(self, articles_batch: List[Dict], preview: bool = False) -> List[Dict]:
-        """Process articles batch with parallel scraping and API calls."""
+        """Process a batch of articles asynchronously with parallel scraping and API calls."""
         processed_articles = []
         
         async with async_playwright() as p:
@@ -300,7 +362,7 @@ class B2BVaultAgent:
                 task = self.scrape_article_content_async(article['url'], context)
                 scrape_tasks.append((article, task))
             
-            # Wait for scraping
+            # Wait for all scraping to complete
             scraped_results = []
             for article, task in scrape_tasks:
                 try:
@@ -313,12 +375,12 @@ class B2BVaultAgent:
             
             await browser.close()
         
-        # Process with Perplexity API in parallel
+        # Now process Perplexity API calls in parallel using ThreadPoolExecutor
         if scraped_results:
             def process_single_article(article_content_pair):
                 article, content = article_content_pair
                 try:
-                    summary = self.send_to_perplexity(content)
+                    summary = self.send_to_perplexity(content, preview=False)
                     return {
                         **article,
                         'content': content,
@@ -328,6 +390,7 @@ class B2BVaultAgent:
                     self.logger.error(f"Error processing article '{article['title']}': {e}")
                     return None
             
+            # Use ThreadPoolExecutor for parallel API calls
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(self.max_workers, 5)) as executor:
                 results = list(executor.map(process_single_article, scraped_results))
                 processed_articles = [r for r in results if r is not None]
@@ -335,11 +398,12 @@ class B2BVaultAgent:
         return processed_articles
 
     def process_multiple_articles_parallel(self, articles: List[Dict], preview: bool = False) -> List[Dict]:
-        """Process articles using parallel execution."""
+        """Process multiple articles using parallel execution with optimized batching."""
         if preview:
             print(f"\n🔄 Processing {len(articles)} articles in parallel...")
         
-        batch_size = min(self.max_workers, 8)
+        # Smaller batches for better parallelization
+        batch_size = min(self.max_workers, 8)  # Smaller batches
         article_batches = [articles[i:i + batch_size] for i in range(0, len(articles), batch_size)]
         
         all_processed_articles = []
@@ -348,6 +412,7 @@ class B2BVaultAgent:
             if preview:
                 print(f"\n📦 Processing batch {batch_idx + 1}/{len(article_batches)} ({len(batch)} articles)...")
             
+            # Run async batch processing
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -364,34 +429,43 @@ class B2BVaultAgent:
                 self.logger.error(f"Error processing batch {batch_idx + 1}: {e}")
             finally:
                 loop.close()
+            
+            # No delay between batches since we're using smaller batches
         
         return all_processed_articles
 
-    def send_to_perplexity(self, article_content: str) -> str:
-        """Send article content to Perplexity API."""
+    def send_to_perplexity(self, article_content: str, preview: bool = False) -> str:
+        """Send article content to Perplexity API with faster settings and strict TL;DR ending."""
         url = "https://api.perplexity.ai/chat/completions"
         headers = {
             "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
             "Content-Type": "application/json"
         }
         
+        # Stronger instructions for TL;DR
         prompt = f"""
         Analyze this B2B sales article and provide:
-        1. A short 1-sentence TL;DR at the very top (around 40 words)
+        1. A short 1-sentence TL;DR at the very top. Each sentence must be complete, self-contained, and end with a period or other proper punctuation. it should be around 40 words.
         2. 3-5 key takeaways
         3. Notable companies/technologies
         4. 3-5 actionable recommendations for B2B sales
 
-        NO BOLD OR ITALICS. NO MARKDOWN. NO FORMATTING. JUST TEXT AND SPACING.
-        NO CITATIONS. NO SOURCES. NO REFERENCES.
+        Do not use any formatting (no bold, italics, or markdown). Do not mention the prompt or instructions in your answer.
 
-        Article: {article_content[:4000]}
+        Make sure to use indenting to make it the easiest it can be to read.
+
+        NO BOLD OR ITALICS. NO MARKDOWN. NO FORMATTING. JUST TEXT AND SPACING (numbers for lists are fine).
+        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT. JUST PLAIN TEXT, NOTHING MORE -- no bold or italics, no markdown, no formatting, just text and spacing (numbers for lists are fine).
+
+        Article:
+         
+         {article_content[:4000]}
         """
         
         payload = {
             "model": "sonar",
             "messages": [
-                {"role": "system", "content": "You are a B2B sales analyst. Always write complete sentences that end with proper punctuation."},
+                {"role": "system", "content": "You are a B2B sales analyst. For the TL;DR, always write two complete sentences that end with a period or other proper punctuation. Never let a TL;DR sentence trail off or end with '...' or incomplete thoughts. If the model tries to end with '...', finish the sentence properly."},
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": 600,
@@ -403,31 +477,205 @@ class B2BVaultAgent:
             response.raise_for_status()
             result = response.json()
             summary = result["choices"][0]["message"]["content"]
-            
-            # Clean up TL;DR if needed
+
+            # --- Post-process TL;DR to remove trailing '...' if present ---
+            # Find the TL;DR (first two sentences)
             lines = summary.splitlines()
             if lines and "TL;DR" in lines[0]:
-                tldr_line = lines[0].rstrip('.').rstrip()
+                tldr_line = lines[0]
+                # Remove trailing '...' and ensure period
+                tldr_line = tldr_line.rstrip('.').rstrip()
                 if tldr_line.endswith('..'):
                     tldr_line = tldr_line.rstrip('.')
                 if not tldr_line.endswith('.'):
                     tldr_line += '.'
                 lines[0] = tldr_line
                 summary = "\n".join(lines)
-            
+            # --- End post-processing ---
+
             return summary
             
         except Exception as e:
             self.logger.error(f"Perplexity API error: {e}")
             return "Analysis failed"
 
+    def generate_pdf_report(self, summary: str, article_title: str = "B2B Article Analysis", preview: bool = False):
+        """Generate a PDF report from the summary."""
+        self.logger.info("Generating PDF report")
+        if preview:
+            print("📄 Generating PDF report...")
+        
+        # Precompute summary with line breaks replaced
+        summary_html = summary.replace('\n', '<br>')
+
+        # Create HTML content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    line-height: 1.6;
+                }}
+                h1 {{
+                    color: #2c3e50;
+                    border-bottom: 2px solid #3498db;
+                    padding-bottom: 10px;
+                }}
+                .header {{
+                    background-color: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }}
+                .content {{
+                    white-space: pre-line;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>B2B Vault Analysis Report</h1>
+                <p><strong>Article:</strong> {article_title}</p>
+                <p><strong>Generated:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+            <div class="content">
+                {summary_html}
+            </div>
+        </body>
+        </html>
+        """
+        
+        try:
+            # Generate PDF
+            output_path = os.path.join(self.output_dir, REPORT_FILENAME)
+            HTML(string=html_content).write_pdf(output_path)
+            self.logger.info(f"PDF report generated: {output_path}")
+            if preview:
+                print(f"   ✅ PDF saved to: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            self.logger.error(f"Error generating PDF: {e}")
+            raise
+
+    def scrape_article_content(self, article_url: str, preview: bool = False) -> str:
+        """Synchronous version of article content scraping for fallback processing."""
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                
+                page.goto(article_url, timeout=20000)
+                page.wait_for_load_state("domcontentloaded")
+                
+                # Get content
+                content = page.content()
+                browser.close()
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract title
+                title_selectors = ["h1", ".article-title", ".post-title", "title"]
+                title = "Untitled"
+                for selector in title_selectors:
+                    title_elem = soup.select_one(selector)
+                    if title_elem and title_elem.get_text(strip=True):
+                        title = title_elem.get_text(strip=True)
+                        break
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract title
+                title_selectors = ["h1", ".article-title", ".post-title", "title"]
+                title = "Untitled"
+                for selector in title_selectors:
+                    title_elem = soup.select_one(selector)
+                    if title_elem and title_elem.get_text(strip=True):
+                        title = title_elem.get_text(strip=True)
+                        break
+                
+                # Extract article body
+                body_selectors = [
+                    "article", ".article-content", ".post-content", 
+                    ".content", "main", ".rich-text"
+                ]
+                
+                body_text = ""
+                for selector in body_selectors:
+                    body_elem = soup.select_one(selector)
+                    if body_elem:
+                        body_text = body_elem.get_text("\n", strip=True)
+                        break
+                
+                if not body_text:
+                    paragraphs = soup.find_all("p")
+                    body_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                
+                return f"Title: {title}\n\nContent:\n{body_text}"
+                
+        except Exception as e:
+            self.logger.error(f"Error scraping article {article_url}: {e}")
+            return ""
+
+    def process_multiple_articles(self, articles: List[Dict], preview: bool = False) -> List[Dict]:
+        """Process multiple articles and return their summaries."""
+        processed_articles = []
+        
+        if preview:
+            print(f"\n🔄 Processing {len(articles)} articles...")
+        
+        for i, article in enumerate(articles):
+            try:
+                if preview:
+                    print(f"\n📖 Processing article {i+1}/{len(articles)}: {article['title'][:60]}...")
+                
+                # Scrape article content
+                content = self.scrape_article_content(article['url'], preview=False)  # Disable preview for individual scraping
+                
+                if not content:
+                    self.logger.warning(f"Failed to scrape content for: {article['title']}")
+                    continue
+                
+                # Send to Perplexity for analysis
+                if preview:
+                    print(f"   🤖 Analyzing with Perplexity AI...")
+                summary = self.send_to_perplexity(content, preview=False)
+                
+                processed_articles.append({
+                    **article,
+                    'content': content,
+                    'summary': summary
+                })
+                
+                if preview:
+                    print(f"   ✅ Article {i+1} processed successfully")
+                
+                # Add a small delay to be respectful to the API
+                time.sleep(1)
+                
+            except Exception as e:
+                self.logger.error(f"Error processing article '{article['title']}': {e}")
+                if preview:
+                    print(f"   ❌ Error processing article {i+1}: {e}")
+                continue
+        
+        return processed_articles
+
     def generate_comprehensive_pdf_report(self, processed_articles: List[Dict], preview: bool = False):
-        """Generate comprehensive PDF report."""
+        """Generate a comprehensive PDF report with all processed articles."""
         self.logger.info("Generating comprehensive PDF report")
         if preview:
             print(f"📄 Generating comprehensive PDF report with {len(processed_articles)} articles...")
         
+        # Create HTML content for all articles
         articles_html = ""
+        
         for i, article in enumerate(processed_articles):
             summary_html = article['summary'].replace('\n', '<br>')
             publisher = article.get('publisher', 'Unknown Publisher')
@@ -449,23 +697,75 @@ class B2BVaultAgent:
             {'<div class="page-break"></div>' if i < len(processed_articles) - 1 else ''}
             """
         
+        # Create HTML content
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <style>
-                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }}
-                h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 15px; text-align: center; }}
-                h2 {{ color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-top: 30px; }}
-                h3 {{ color: #2980b9; margin-top: 25px; }}
-                .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px; text-align: center; }}
-                .article-section {{ margin-bottom: 40px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; }}
-                .article-meta {{ background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
-                .article-meta p {{ margin: 5px 0; }}
-                .article-summary {{ background-color: white; padding: 20px; border-radius: 5px; border-left: 4px solid #3498db; }}
-                .page-break {{ page-break-before: always; }}
-                a {{ color: #3498db; text-decoration: none; }}
+                body {{
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    line-height: 1.6;
+                }}
+                h1 {{
+                    color: #2c3e50;
+                    border-bottom: 3px solid #3498db;
+                    padding-bottom: 15px;
+                    text-align: center;
+                }}
+                h2 {{
+                    color: #34495e;
+                    border-bottom: 2px solid #ecf0f1;
+                    padding-bottom: 10px;
+                    margin-top: 30px;
+                }}
+                h3 {{
+                    color: #2980b9;
+                    margin-top: 25px;
+                }}
+                .header {{
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                    text-align: center;
+                }}
+                .article-section {{
+                    margin-bottom: 40px;
+                    padding: 20px;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    background-color: #fafafa;
+                }}
+                .article-meta {{
+                    background-color: #e8f4f8;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }}
+                .article-meta p {{
+                    margin: 5px 0;
+                }}
+                .article-summary {{
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    border-left: 4px solid #3498db;
+                }}
+                .page-break {{
+                    page-break-before: always;
+                }}
+                a {{
+                    color: #3498db;
+                    text-decoration: none;
+                }}
+                a:hover {{
+                    text-decoration: underline;
+                }}
             </style>
         </head>
         <body>
@@ -481,6 +781,7 @@ class B2BVaultAgent:
         """
         
         try:
+            # Generate PDF
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             filename = f"b2b_vault_comprehensive_report_{timestamp}.pdf"
             output_path = os.path.join(self.output_dir, filename)
@@ -495,7 +796,7 @@ class B2BVaultAgent:
             raise
 
     def generate_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
-        """Generate a static website to display all analyzed articles with search functionality."""
+        """Generate a static website to display all analyzed articles."""
         self.logger.info("Generating static website")
         if preview:
             print("🌐 Generating static website...")
@@ -537,255 +838,249 @@ class B2BVaultAgent:
             </div>
             """
         
-        # PDF download link
-        pdf_link = ""
-        if pdf_path and os.path.exists(pdf_path):
-            pdf_filename = os.path.basename(pdf_path)
-            # Copy PDF to website directory
-            import shutil
-            pdf_dest = os.path.join(website_dir, pdf_filename)
-            shutil.copy2(pdf_path, pdf_dest)
-            pdf_link = f'<a href="{pdf_filename}" class="btn btn-download" download>📄 Download PDF Report</a>'
-        
         # Generate main HTML
         html_content = f"""
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <title>B2B Vault Analysis - {len(processed_articles)} Articles</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>B2B Vault Analysis Dashboard</title>
             <style>
-                body {{
-                    font-family: Arial, sans-serif;
+                * {{
                     margin: 0;
                     padding: 0;
-                    background-color: #f4f4f9;
+                    box-sizing: border-box;
                 }}
-                .header {{
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 40px 20px;
-                    text-align: center;
+                    min-height: 100vh;
                 }}
-                .header h1 {{
-                    margin: 0 0 10px 0;
-                    font-size: 2.5rem;
-                }}
-                .header p {{
-                    margin: 0;
-                    font-size: 1.1rem;
-                    opacity: 0.9;
-                }}
+                
                 .container {{
                     max-width: 1200px;
                     margin: 0 auto;
                     padding: 20px;
                 }}
-                .controls {{
-                    background: white;
+                
+                .header {{
+                    text-align: center;
+                    color: white;
+                    margin-bottom: 40px;
+                    padding: 40px 20px;
+                }}
+                
+                .header h1 {{
+                    font-size: 3rem;
+                    margin-bottom: 10px;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                }}
+                
+                .header p {{
+                    font-size: 1.2rem;
+                    opacity: 0.9;
+                }}
+                
+                .stats {{
+                    display: flex;
+                    justify-content: center;
+                    gap: 30px;
+                    margin: 30px 0;
+                    flex-wrap: wrap;
+                }}
+                
+                .stat-card {{
+                    background: rgba(255,255,255,0.1);
                     padding: 20px;
                     border-radius: 10px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }}
-                .search-bar {{
-                    display: flex;
-                    gap: 15px;
-                    margin-bottom: 20px;
-                    flex-wrap: wrap;
-                }}
-                .search-input {{
-                    flex: 1;
-                    min-width: 300px;
-                    padding: 12px;
-                    font-size: 16px;
-                    border: 2px solid #e0e0e0;
-                    border-radius: 8px;
-                }}
-                .filter-buttons {{
-                    display: flex;
-                    gap: 10px;
-                    flex-wrap: wrap;
-                    margin-bottom: 15px;
-                }}
-                .filter-btn {{
-                    padding: 8px 16px;
-                    border: 2px solid #667eea;
-                    background: white;
-                    color: #667eea;
-                    border-radius: 20px;
-                    cursor: pointer;
-                    font-size: 0.9rem;
-                    transition: all 0.3s ease;
-                }}
-                .filter-btn:hover, .filter-btn.active {{
-                    background: #667eea;
+                    text-align: center;
                     color: white;
+                    backdrop-filter: blur(10px);
                 }}
-                .btn-download {{
-                    background: #28a745;
-                    color: white;
-                    padding: 12px 24px;
-                    border-radius: 8px;
-                    text-decoration: none;
+                
+                .stat-number {{
+                    font-size: 2rem;
                     font-weight: bold;
+                    display: block;
                 }}
+                
+                .search-box {{
+                    margin: 30px 0;
+                    text-align: center;
+                }}
+                
+                .search-input {{
+                    padding: 12px 20px;
+                    font-size: 16px;
+                    border: none;
+                    border-radius: 25px;
+                    width: 300px;
+                    max-width: 90%;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }}
+                
+                .articles-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                    gap: 30px;
+                    margin-top: 30px;
+                }}
+                
                 .article-card {{
                     background: white;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-                    margin-bottom: 20px;
-                    padding: 20px;
-                    transition: transform 0.3s, box-shadow 0.3s;
+                    border-radius: 15px;
+                    padding: 25px;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    border-left: 5px solid #667eea;
                 }}
+                
                 .article-card:hover {{
-                    transform: translateY(-2px);
-                    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+                    transform: translateY(-5px);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
                 }}
+                
                 .article-title {{
-                    font-size: 1.3rem;
                     color: #2c3e50;
-                    margin: 0 0 15px 0;
+                    margin-bottom: 15px;
+                    font-size: 1.3rem;
                     line-height: 1.4;
                 }}
+                
                 .article-meta {{
                     display: flex;
-                    gap: 15px;
+                    gap: 10px;
                     margin-bottom: 15px;
                     flex-wrap: wrap;
                 }}
+                
                 .tab-badge {{
                     background: #667eea;
                     color: white;
                     padding: 4px 12px;
-                    border-radius: 12px;
+                    border-radius: 20px;
                     font-size: 0.8rem;
                     font-weight: bold;
                 }}
-                .publisher, .date, .word-count {{
-                    color: #7f8c8d;
+                
+                .date, .word-count, .publisher {{
+                    color: #666;
                     font-size: 0.9rem;
+                    padding: 4px 8px;
+                    background: #f8f9fa;
+                    border-radius: 15px;
                 }}
+                
                 .article-preview p {{
-                    color: #34495e;
-                    line-height: 1.6;
                     margin-bottom: 15px;
+                    color: #555;
+                    line-height: 1.6;
                 }}
-                .expand-btn {{
-                    background: #3498db;
+                
+                .expand-btn, .source-link {{
+                    background: #667eea;
                     color: white;
                     border: none;
                     padding: 10px 20px;
-                    border-radius: 6px;
+                    border-radius: 25px;
                     cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    transition: background 0.3s ease;
                     font-size: 0.9rem;
                 }}
-                .expand-btn:hover {{
-                    background: #2980b9;
+                
+                .expand-btn:hover, .source-link:hover {{
+                    background: #5a6fd8;
                 }}
+                
                 .article-full {{
                     margin-top: 20px;
                     padding-top: 20px;
-                    border-top: 1px solid #ecf0f1;
+                    border-top: 1px solid #eee;
                 }}
+                
                 .summary-content {{
-                    color: #2c3e50;
-                    line-height: 1.6;
                     margin-bottom: 20px;
+                    line-height: 1.7;
+                    color: #444;
                 }}
-                .article-actions {{
-                    display: flex;
-                    gap: 15px;
-                    flex-wrap: wrap;
-                }}
-                .source-link {{
-                    background: #27ae60;
-                    color: white;
-                    padding: 10px 20px;
-                    border-radius: 6px;
-                    text-decoration: none;
-                    font-size: 0.9rem;
-                }}
-                .source-link:hover {{
-                    background: #229954;
-                }}
-                .stats {{
-                    background: white;
-                    padding: 20px;
-                    border-radius: 10px;
-                    margin-bottom: 30px;
+                
+                .article-link {{
                     text-align: center;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }}
-                .stats h3 {{
-                    margin: 0 0 15px 0;
-                    color: #2c3e50;
+                
+                .footer {{
+                    text-align: center;
+                    color: white;
+                    margin-top: 50px;
+                    padding: 20px;
+                    opacity: 0.8;
                 }}
-                .stats-grid {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-                    gap: 20px;
-                }}
-                .stat-item {{
-                    color: #7f8c8d;
-                }}
-                .stat-number {{
-                    font-size: 1.8rem;
-                    font-weight: bold;
-                    color: #667eea;
-                    display: block;
+                
+                @media (max-width: 768px) {{
+                    .articles-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+                    
+                    .header h1 {{
+                        font-size: 2rem;
+                    }}
+                    
+                    .stats {{
+                        gap: 15px;
+                    }}
                 }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>📊 B2B Vault Analysis</h1>
-                <p>Comprehensive analysis of {len(processed_articles)} B2B articles with AI insights</p>
-            </div>
-            
             <div class="container">
-                <div class="stats">
-                    <h3>📈 Analysis Overview</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
+                <div class="header">
+                    <h1>B2B Vault Analysis Dashboard</h1>
+                    <p>B2B Vault articles summaries</p>
+                    
+                    <div class="stats">
+                        <div class="stat-card">
                             <span class="stat-number">{len(processed_articles)}</span>
-                            <div>Articles Analyzed</div>
+                            <span>Articles Analyzed</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-number">{len(set(a.get('tab', 'Unknown') for a in processed_articles))}</span>
-                            <div>Categories</div>
+                        <div class="stat-card">
+                            <span class="stat-number">{sum(len(a['summary'].split()) for a in processed_articles):,}</span>
+                            <span>Total Words</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-number">{len(set(a.get('publisher', 'Unknown') for a in processed_articles))}</span>
-                            <div>Publishers</div>
+                        <div class="stat-card">
+                            <span class="stat-number">{len(set(a['tab'] for a in processed_articles))}</span>
+                            <span>Categories</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-number">{sum(len(a.get('summary', '').split()) for a in processed_articles)}</span>
-                            <div>Total Insights</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="controls">
-                    <div class="search-bar">
-                        <input type="text" class="search-input" placeholder="🔍 Search articles by title, content, publisher, or category..." onkeyup="searchArticles()">
-                        {pdf_link}
                     </div>
                     
-                    <div class="filter-buttons">
-                        <button class="filter-btn active" onclick="filterByTag('all')">All Articles</button>
-                        {' '.join([f'<button class="filter-btn" onclick="filterByTag(\'{tag}\')">{tag}</button>' for tag in sorted(set(a.get('tab', 'Unknown') for a in processed_articles))])}
+                    <div class="search-box">
+                        <input type="text" class="search-input" placeholder="Search articles..." onkeyup="searchArticles()">
                     </div>
                 </div>
                 
-                <div class="articles-container">
+                <div class="articles-grid" id="articles-grid">
                     {articles_html}
                 </div>
-            </div>
-
-            <script>
-                let currentFilter = 'all';
                 
+                <div class="footer">
+                    <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')} | Powered by Perplexity AI</p>
+                    {f'''<div style="margin-top: 15px;">
+                        <a href="../{os.path.basename(pdf_path)}" 
+                           class="source-link" 
+                           download
+                           style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 10px;">
+                           📄 Download PDF Report
+                        </a>
+                    </div>''' if pdf_path and os.path.exists(pdf_path) else ''}
+                </div>
+            </div>
+            
+            <script>
                 function toggleArticle(index) {{
                     const fullDiv = document.getElementById('full-' + index);
                     const btn = event.target;
@@ -799,30 +1094,6 @@ class B2BVaultAgent:
                     }}
                 }}
                 
-                function filterByTag(tag) {{
-                    currentFilter = tag;
-                    
-                    // Update button states
-                    document.querySelectorAll('.filter-btn').forEach(btn => {{
-                        btn.classList.remove('active');
-                    }});
-                    event.target.classList.add('active');
-                    
-                    // Filter articles
-                    const articles = document.querySelectorAll('.article-card');
-                    articles.forEach(article => {{
-                        const articleTag = article.querySelector('.tab-badge').textContent;
-                        if (tag === 'all' || articleTag === tag) {{
-                            article.style.display = 'block';
-                        }} else {{
-                            article.style.display = 'none';
-                        }}
-                    }});
-                    
-                    // Clear search when filtering
-                    document.querySelector('.search-input').value = '';
-                }}
-                
                 function searchArticles() {{
                     const searchTerm = document.querySelector('.search-input').value.toLowerCase();
                     const articles = document.querySelectorAll('.article-card');
@@ -830,12 +1101,8 @@ class B2BVaultAgent:
                     articles.forEach(article => {{
                         const title = article.querySelector('.article-title').textContent.toLowerCase();
                         const content = article.textContent.toLowerCase();
-                        const tag = article.querySelector('.tab-badge').textContent;
                         
-                        const matchesSearch = searchTerm === '' || content.includes(searchTerm);
-                        const matchesFilter = currentFilter === 'all' || tag === currentFilter;
-                        
-                        if (matchesSearch && matchesFilter) {{
+                        if (title.includes(searchTerm) || content.includes(searchTerm)) {{
                             article.style.display = 'block';
                         }} else {{
                             article.style.display = 'none';
@@ -847,631 +1114,387 @@ class B2BVaultAgent:
         </html>
         """
         
-        # Save the HTML file
-        html_path = os.path.join(website_dir, "index.html")
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        self.logger.info(f"Website generated: {html_path}")
-        if preview:
-            print(f"   ✅ Website saved to: {html_path}")
-        
-        return html_path
-
-    def generate_advanced_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
-        """Generate an advanced website with powerful filtering and search capabilities."""
-        self.logger.info("Generating advanced website with filtering")
-        if preview:
-            print("🌐 Generating advanced website with filtering...")
-        
-        # Create website directory
-        website_dir = os.path.join(self.output_dir, "website")
-        os.makedirs(website_dir, exist_ok=True)
-        
-        # Get unique values for filters
-        categories = sorted(set(a.get('tab', 'Unknown') for a in processed_articles))
-        publishers = sorted(set(a.get('publisher', 'Unknown Publisher') for a in processed_articles))
-        
-        # Generate article cards HTML with enhanced data attributes
-        articles_html = ""
-        for i, article in enumerate(processed_articles):
-            summary_preview = article['summary'][:300] + "..." if len(article['summary']) > 300 else article['summary']
-            word_count = len(article['summary'].split())
-            publisher = article.get('publisher', 'Unknown Publisher')
+        try:
+            # Save the website
+            website_path = os.path.join(website_dir, "index.html")
+            with open(website_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
             
-            articles_html += f"""
-            <div class="article-card" id="article-{i}" 
-                 data-category="{article['tab']}" 
-                 data-publisher="{publisher}"
-                 data-date="{article['scraped_at']}"
-                 data-words="{word_count}">
-                <div class="article-header">
-                    <h2 class="article-title">{article['title']}</h2>
-                    <div class="article-meta">
-                        <span class="tab-badge">{article['tab']}</span>
-                        <span class="publisher">📰 {publisher}</span>
-                        <span class="date">📅 {article['scraped_at']}</span>
-                        <span class="word-count">📝 {word_count} words</span>
-                    </div>
-                </div>
-                <div class="article-preview">
-                    <p>{summary_preview}</p>
-                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Analysis</button>
-                </div>
-                <div class="article-full" id="full-{i}" style="display: none;">
-                    <div class="summary-content">
-                        {article['summary'].replace(chr(10), '<br>')}
-                    </div>
-                    <div class="article-actions">
-                        <a href="{article['url']}" target="_blank" class="source-link">🔗 View Original Article</a>
-                        <button class="copy-btn" onclick="copyToClipboard({i})">📋 Copy Analysis</button>
-                    </div>
-                </div>
-            </div>
-            """
+            # Generate a simple launcher script
+            launcher_script = f"""#!/usr/bin/env python3
+import os
+import http.server
+import socketserver
+import webbrowser
+import time
+
+def start_server():
+    website_dir = r"{website_dir}"
+    PORT = 8000
+    
+    if not os.path.exists(website_dir):
+        print("❌ Website directory not found!")
+        return
         
-        # PDF download link
-        pdf_link = ""
-        if pdf_path and os.path.exists(pdf_path):
-            pdf_filename = os.path.basename(pdf_path)
-            import shutil
-            pdf_dest = os.path.join(website_dir, pdf_filename)
-            shutil.copy2(pdf_path, pdf_dest)
-            pdf_link = f'<a href="{pdf_filename}" class="btn btn-download" download>📄 Download PDF Report</a>'
-        
-        # Generate advanced HTML with powerful filtering
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>B2B Vault Intelligence Hub - {len(processed_articles)} Articles</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-                
-                body {{
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background: #f8fafc;
-                    line-height: 1.6;
-                }}
-                
-                .header {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 40px 20px;
-                    text-align: center;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                }}
-                
-                .header h1 {{ 
-                    font-size: 3rem; 
-                    margin-bottom: 10px; 
-                    font-weight: 700;
-                }}
-                
-                .header p {{ 
-                    font-size: 1.2rem; 
-                    opacity: 0.9; 
-                    max-width: 600px;
-                    margin: 0 auto;
-                }}
-                
-                .container {{ 
-                    max-width: 1400px; 
-                    margin: 0 auto; 
-                    padding: 20px; 
-                }}
-                
-                .stats-dashboard {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 20px;
-                    margin: 30px 0;
-                }}
-                
-                .stat-card {{
-                    background: white;
-                    padding: 25px;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-                    text-align: center;
-                    border: 1px solid #e2e8f0;
-                }}
-                
-                .stat-number {{
-                    font-size: 2.5rem;
-                    font-weight: bold;
-                    color: #667eea;
-                    display: block;
-                }}
-                
-                .stat-label {{
-                    color: #64748b;
-                    font-size: 0.9rem;
-                    margin-top: 5px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                
-                .controls-panel {{
-                    background: white;
-                    padding: 30px;
-                    border-radius: 12px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-                    border: 1px solid #e2e8f0;
-                }}
-                
-                .search-section {{
-                    margin-bottom: 25px;
-                }}
-                
-                .search-input {{
-                    width: 100%;
-                    padding: 15px 20px;
-                    font-size: 16px;
-                    border: 2px solid #e2e8f0;
-                    border-radius: 10px;
-                    transition: border-color 0.3s;
-                }}
-                
-                .search-input:focus {{
-                    outline: none;
-                    border-color: #667eea;
-                }}
-                
-                .filters-grid {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
-                    margin-bottom: 20px;
-                }}
-                
-                .filter-group {{
-                    background: #f8fafc;
-                    padding: 20px;
-                    border-radius: 8px;
-                }}
-                
-                .filter-group h4 {{
-                    color: #1e293b;
-                    margin-bottom: 15px;
-                    font-size: 0.9rem;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                
-                .filter-buttons {{
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                }}
-                
-                .filter-btn {{
-                    padding: 8px 16px;
-                    border: 2px solid #e2e8f0;
-                    background: white;
-                    color: #64748b;
-                    border-radius: 20px;
-                    cursor: pointer;
-                    font-size: 0.85rem;
-                    transition: all 0.3s;
-                    white-space: nowrap;
-                }}
-                
-                .filter-btn:hover {{
-                    border-color: #667eea;
-                    color: #667eea;
-                }}
-                
-                .filter-btn.active {{
-                    background: #667eea;
-                    color: white;
-                    border-color: #667eea;
-                }}
-                
-                .action-buttons {{
-                    display: flex;
-                    gap: 15px;
-                    flex-wrap: wrap;
-                    align-items: center;
-                }}
-                
-                .btn {{
-                    padding: 12px 24px;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    text-decoration: none;
-                    display: inline-block;
-                }}
-                
-                .btn-primary {{ background: #667eea; color: white; }}
-                .btn-secondary {{ background: #64748b; color: white; }}
-                .btn-success {{ background: #10b981; color: white; }}
-                
-                .btn:hover {{ transform: translateY(-2px); }}
-                
-                .results-summary {{
-                    background: #f1f5f9;
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                    border-left: 4px solid #667eea;
-                }}
-                
-                .articles-grid {{
-                    display: grid;
-                    gap: 25px;
-                }}
-                
-                .article-card {{
-                    background: white;
-                    border-radius: 12px;
-                    padding: 25px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-                    border: 1px solid #e2e8f0;
-                    transition: all 0.3s;
-                }}
-                
-                .article-card:hover {{
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-                }}
-                
-                .article-title {{
-                    font-size: 1.4rem;
-                    color: #1e293b;
-                    margin-bottom: 15px;
-                    line-height: 1.4;
-                    font-weight: 600;
-                }}
-                
-                .article-meta {{
-                    display: flex;
-                    gap: 15px;
-                    margin-bottom: 20px;
-                    flex-wrap: wrap;
-                }}
-                
-                .tab-badge {{
-                    background: #667eea;
-                    color: white;
-                    padding: 6px 12px;
-                    border-radius: 15px;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                }}
-                
-                .publisher, .date, .word-count {{
-                    color: #64748b;
-                    font-size: 0.85rem;
-                    background: #f8fafc;
-                    padding: 4px 8px;
-                    border-radius: 6px;
-                }}
-                
-                .article-preview p {{
-                    color: #475569;
-                    line-height: 1.7;
-                    margin-bottom: 20px;
-                }}
-                
-                .expand-btn {{
-                    background: #3b82f6;
-                    color: white;
-                    border: none;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    transition: background 0.3s;
-                }}
-                
-                .expand-btn:hover {{ background: #2563eb; }}
-                
-                .article-full {{
-                    margin-top: 25px;
-                    padding-top: 25px;
-                    border-top: 2px solid #f1f5f9;
-                }}
-                
-                .summary-content {{
-                    color: #374151;
-                    line-height: 1.8;
-                    margin-bottom: 25px;
-                    font-size: 1.05rem;
-                }}
-                
-                .article-actions {{
-                    display: flex;
-                    gap: 15px;
-                    flex-wrap: wrap;
-                }}
-                
-                .source-link {{
-                    background: #10b981;
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    transition: background 0.3s;
-                }}
-                
-                .source-link:hover {{ background: #059669; }}
-                
-                .copy-btn {{
-                    background: #6b7280;
-                    color: white;
-                    border: none;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 600;
-                }}
-                
-                .no-results {{
-                    text-align: center;
-                    padding: 60px 20px;
-                    color: #64748b;
-                }}
-                
-                @media (max-width: 768px) {{
-                    .header h1 {{ font-size: 2rem; }}
-                    .container {{ padding: 15px; }}
-                    .controls-panel {{ padding: 20px; }}
-                    .filters-grid {{ grid-template-columns: 1fr; }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>🧠 B2B Vault Intelligence Hub</h1>
-                <p>Comprehensive analysis of {len(processed_articles)} B2B articles with AI-powered insights and advanced filtering</p>
-            </div>
+    os.chdir(website_dir)
+    Handler = http.server.SimpleHTTPRequestHandler
+    
+    try:
+        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            print(f"🌐 B2B Vault Analysis Website")
+            print(f"🚀 Server running at http://localhost:{{PORT}}")
+            print("📱 Opening in your browser...")
+            print("⏹️  Press Ctrl+C to stop the server")
             
-            <div class="container">
-                <div class="stats-dashboard">
-                    <div class="stat-card">
-                        <span class="stat-number">{len(processed_articles)}</span>
-                        <div class="stat-label">Articles Analyzed</div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-number">{len(categories)}</span>
-                        <div class="stat-label">Categories</div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-number">{len(publishers)}</span>
-                        <div class="stat-label">Publishers</div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-number">{sum(len(a.get('summary', '').split()) for a in processed_articles):,}</span>
-                        <div class="stat-label">AI Insights</div>
-                    </div>
-                </div>
-                
-                <div class="controls-panel">
-                    <div class="search-section">
-                        <input type="text" class="search-input" 
-                               placeholder="🔍 Search articles by title, content, insights, company names..." 
-                               onkeyup="performAdvancedSearch()">
-                    </div>
-                    
-                    <div class="filters-grid">
-                        <div class="filter-group">
-                            <h4>📂 Categories</h4>
-                            <div class="filter-buttons">
-                                <button class="filter-btn active" onclick="filterByCategory('all')">All</button>
-                                {' '.join([f'<button class="filter-btn" onclick="filterByCategory(\'{cat}\')">{cat}</button>' for cat in categories])}
-                            </div>
-                        </div>
-                        
-                        <div class="filter-group">
-                            <h4>📰 Publishers</h4>
-                            <div class="filter-buttons">
-                                <button class="filter-btn active" onclick="filterByPublisher('all')">All</button>
-                                {' '.join([f'<button class="filter-btn" onclick="filterByPublisher(\'{pub}\')">{pub}</button>' for pub in publishers[:8]])}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="action-buttons">
-                        {pdf_link}
-                        <button class="btn btn-secondary" onclick="clearAllFilters()">🔄 Clear Filters</button>
-                        <button class="btn btn-primary" onclick="exportData()">📊 Export Data</button>
-                    </div>
-                </div>
-                
-                <div class="results-summary" id="resultsSummary">
-                    Showing all {len(processed_articles)} articles
-                </div>
-                
-                <div class="articles-grid" id="articlesGrid">
-                    {articles_html}
-                </div>
-                
-                <div class="no-results" id="noResults" style="display: none;">
-                    <h3>🔍 No articles found</h3>
-                    <p>Try adjusting your search terms or filters</p>
-                </div>
-            </div>
+            time.sleep(1)
+            webbrowser.open(f'http://localhost:{{PORT}}')
+            httpd.serve_forever()
+            
+    except KeyboardInterrupt:
+        print("\\n✅ Server stopped.")
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"❌ Port {{PORT}} is already in use. Try a different port or stop the existing server.")
+        else:
+            print(f"❌ Error starting server: {{e}}")
 
-            <script>
-                let currentCategoryFilter = 'all';
-                let currentPublisherFilter = 'all';
-                let currentSearchTerm = '';
-                
-                function performAdvancedSearch() {{
-                    currentSearchTerm = document.querySelector('.search-input').value.toLowerCase().trim();
-                    applyAllFilters();
-                }}
-                
-                function filterByCategory(category) {{
-                    currentCategoryFilter = category;
-                    updateFilterButtons('.filter-group:first-child .filter-btn', category);
-                    applyAllFilters();
-                }}
-                
-                function filterByPublisher(publisher) {{
-                    currentPublisherFilter = publisher;
-                    updateFilterButtons('.filter-group:last-child .filter-btn', publisher);
-                    applyAllFilters();
-                }}
-                
-                function updateFilterButtons(selector, activeValue) {{
-                    document.querySelectorAll(selector).forEach(btn => {{
-                        btn.classList.remove('active');
-                        if (btn.textContent === activeValue || (activeValue === 'all' && btn.textContent === 'All')) {{
-                            btn.classList.add('active');
-                        }}
-                    }});
-                }}
-                
-                function applyAllFilters() {{
-                    const articles = document.querySelectorAll('.article-card');
-                    let visibleCount = 0;
-                    
-                    articles.forEach(article => {{
-                        const matchesCategory = currentCategoryFilter === 'all' || 
-                                              article.dataset.category === currentCategoryFilter;
-                        const matchesPublisher = currentPublisherFilter === 'all' || 
-                                               article.dataset.publisher === currentPublisherFilter;
-                        const matchesSearch = currentSearchTerm === '' || 
-                                            article.textContent.toLowerCase().includes(currentSearchTerm);
-                        
-                        if (matchesCategory && matchesPublisher && matchesSearch) {{
-                            article.style.display = 'block';
-                            visibleCount++;
-                        }} else {{
-                            article.style.display = 'none';
-                        }}
-                    }});
-                    
-                    updateResultsSummary(visibleCount);
-                }}
-                
-                function updateResultsSummary(count) {{
-                    const summary = document.getElementById('resultsSummary');
-                    const noResults = document.getElementById('noResults');
-                    
-                    if (count === 0) {{
-                        summary.style.display = 'none';
-                        noResults.style.display = 'block';
-                    }} else {{
-                        summary.style.display = 'block';
-                        noResults.style.display = 'none';
-                        summary.textContent = `Showing ${{count}} of {len(processed_articles)} articles`;
-                    }}
-                }}
-                
-                function clearAllFilters() {{
-                    currentCategoryFilter = 'all';
-                    currentPublisherFilter = 'all';
-                    currentSearchTerm = '';
-                    document.querySelector('.search-input').value = '';
-                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                    document.querySelectorAll('.filter-btn:first-child').forEach(btn => btn.classList.add('active'));
-                    applyAllFilters();
-                }}
-                
-                function toggleArticle(index) {{
-                    const fullDiv = document.getElementById('full-' + index);
-                    const btn = event.target;
-                    
-                    if (fullDiv.style.display === 'none') {{
-                        fullDiv.style.display = 'block';
-                        btn.textContent = 'Show Less';
-                    }} else {{
-                        fullDiv.style.display = 'none';
-                        btn.textContent = 'Read Full Analysis';
-                    }}
-                }}
-                
-                function copyToClipboard(index) {{
-                    const article = document.getElementById('article-' + index);
-                    const title = article.querySelector('.article-title').textContent;
-                    const summary = article.querySelector('.summary-content').textContent;
-                    const newline = '\\n\\n';
-                    const text = title + newline + summary;
-                    navigator.clipboard.writeText(text);
-                    event.target.textContent = '✅ Copied!';
-                    setTimeout(() => {{
-                        event.target.textContent = '📋 Copy Analysis';
-                    }}, 2000);
-                }}
-                
-                function exportData() {{
-                    alert('Export functionality coming soon!');
-                }}
-            </script>
-        </body>
-        </html>
-        """
-        
-        # Save the HTML file
-        html_path = os.path.join(website_dir, "index.html")
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        self.logger.info(f"Advanced website generated: {html_path}")
-        if preview:
-            print(f"   ✅ Advanced website saved to: {html_path}")
-        
-        return html_path
-
-# Command line interface for comprehensive scraping
 if __name__ == "__main__":
-    import argparse
+    start_server()
+"""
+            
+            server_path = os.path.join(website_dir, "start_server.py")
+            with open(server_path, "w", encoding="utf-8") as f:
+                f.write(launcher_script)
+            
+            # Make server script executable (Unix/Mac)
+            try:
+                os.chmod(server_path, 0o755)
+            except:
+                pass  # Windows doesn't support chmod
+            
+            if preview:
+                print(f"   ✅ Website generated: {website_path}")
+                print(f"   🚀 Server script: {server_path}")
+                print(f"   💡 To view the website, run:")
+                print(f"       python3 start_website.py")
+                print(f"   Or navigate to the website folder and run:")
+                print(f"       python3 start_server.py")
+            
+            return website_path
+            
+        except Exception as e:
+            self.logger.error(f"Error generating website: {e}")
+            raise
+
+    def debug_card_structure(self, preview: bool = False):
+        """Debug method to understand the card structure on B2B Vault."""
+        if not preview:
+            return
+            
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)  # Always show browser for debugging
+            page = browser.new_page()
+            
+            try:
+                print("🔍 DEBUG: Analyzing B2B Vault card structure...")
+                page.goto(BASE_URL, timeout=60000)
+                
+                # Navigate to Sales tab
+                page.wait_for_selector("a[data-w-tab='Sales']", timeout=10000)
+                sales_tab = page.locator("a[data-w-tab='Sales']")
+                sales_tab.click()
+                page.wait_for_timeout(3000)
+                
+                # Get first few cards
+                cards = page.locator("div.w-dyn-item")
+                count = min(cards.count(), 10)  # Look at first 10 cards
+                
+                print(f"🔍 DEBUG: Found {cards.count()} total cards, analyzing first {count}...")
+                
+                for i in range(count):
+                    card = cards.nth(i)
+                    print(f"\n--- CARD {i} DEBUG ---")
+                    
+                    # Try to extract all text from the card
+                    try:
+                        card_html = card.inner_html()
+                        with open(f"{self.output_dir}/debug_card_{i}.html", "w", encoding="utf-8") as f:
+                            f.write(f"<!-- Card {i} HTML -->\n{card_html}\n")
+                        tag_selectors = [
+                        "[class*='tag']",
+                        "[class*='category']",
+                        "div[class*='text']"
+                    ]
+                    
+                        for selector in tag_selectors:
+                            try:
+                                elements = card.locator(selector).all()
+                                if elements:
+                                    print(f"Selector '{selector}' found {len(elements)} elements:")
+                                    for j, elem in enumerate(elements):
+                                        text = elem.inner_text().strip()
+                                        if text:
+                                            print(f"  Element {j}: '{text}'")
+                                else:
+                                    print(f"Selector '{selector}': No elements found")
+                            except Exception as e:
+                                print(f"Selector '{selector}': Error - {e}")
+                        
+                        # Try different title selectors
+                        title_selectors = [
+                            "div.h6-heading",
+                            ".h6-heading",
+                            "h1", "h2", "h3", "h4", "h5", "h6",
+                            "[class*='heading']",
+                            "[class*='title']"
+                        ]
+                        
+                        print("TITLE EXTRACTION ATTEMPTS:")
+                        for selector in title_selectors:
+                            try:
+                                elements = card.locator(selector).all()
+                                if elements:
+                                    print(f"Title selector '{selector}' found {len(elements)} elements:")
+                                    for j, elem in enumerate(elements):
+                                        text = elem.inner_text().strip()
+                                        if text:
+                                            print(f"  Title element {j}: '{text[:100]}...'")
+                            except Exception as e:
+                                print(f"Title selector '{selector}': Error - {e}")
+                        
+                        # Try different publisher selectors
+                        publisher_selectors = [
+                            ".w-layout-grid.grid-2 .text-block-5",
+                            ".text-block-5",
+                            "[class*='grid'] [class*='text-block']",
+                            "div:has-text('Published by:')",
+                            "[class*='publisher']",
+                            "[class*='author']"
+                        ]
+                        
+                        print("PUBLISHER EXTRACTION ATTEMPTS:")
+                        for selector in publisher_selectors:
+                            try:
+                                elements = card.locator(selector).all()
+                                if elements:
+                                    print(f"Publisher selector '{selector}' found {len(elements)} elements:")
+                                    for j, elem in enumerate(elements):
+                                        text = elem.inner_text().strip()
+                                        if text:
+                                            print(f"  Publisher element {j}: '{text}'")
+                            except Exception as e:
+                                print(f"Publisher selector '{selector}': Error - {e}")
+                        
+                        print("--- END CARD DEBUG ---\n")
+                    except Exception as e:
+                        print(f"Could not get card HTML or debug info: {e}")
+                
+            except Exception as e:
+                print(f"DEBUG ERROR: {e}")
+            finally:
+                input("Press Enter to close browser...")  # Wait for user
+                browser.close()
+
+    def run_comprehensive_analysis(self, preview: bool = False):
+        """Run comprehensive analysis for all specified tabs with speed optimizations."""
+        try:
+            start_time = time.time()
+            self.logger.info("Starting comprehensive B2B Vault analysis workflow")
+            if preview:
+                print("\n" + "="*70)
+                print("🚀 B2B VAULT COMPREHENSIVE ANALYSIS WORKFLOW STARTING")
+                print(f"📑 Tabs to search: {', '.join(self.tabs_to_search)}")
+                print(f"⚡ Max parallel workers: {self.max_workers}")
+                print("="*70)
+            
+            all_articles = []
+            
+            # Step 1: Collect articles from all specified tabs
+            for tab in self.tabs_to_search:
+                if preview:
+                    self.logger.error(f"Failed to collect articles from {tab} tab: {e}")
+                    if preview:
+                        print(f"❌ Failed to collect articles from {tab} tab: {e}")
+                    continue
+            
+            if not all_articles:
+                self.logger.error("No articles found in any specified tabs")
+                if preview:
+                    print("❌ No articles found in any specified tabs")
+                    print("💡 Try running the debug mode to see what's happening:")
+                    print("   Uncomment the debug line in the script and run again")
+                return None
+            
+            if preview:
+                print(f"\n📊 TOTAL UNIQUE ARTICLES FOUND: {len(all_articles)}")
+                print("-" * 50)
+                for i, article in enumerate(all_articles[:15]):
+                    print(f"{i+1}. [{article['tab']}] {article['title'][:60]}{'...' if len(article['title']) > 60 else ''}")
+                if len(all_articles) > 15:
+                    print(f"... and {len(all_articles) - 15} more articles")
+            
+            # Step 2: Process all articles - try parallel first, then fallback to sequential
+            if preview:
+                print(f"\n🔄 STEP 2: Processing All Articles")
+                print("-" * 50)
+            
+            processed_articles = []
+            
+            # Try parallel processing first
+            try:
+                if preview:
+                    print("🚀 Attempting parallel processing...")
+                processed_articles = self.process_multiple_articles_parallel(all_articles, preview)
+                
+                if processed_articles and len(processed_articles) > 0:
+                    if preview:
+                        print(f"✅ Parallel processing successful: {len(processed_articles)} articles processed")
+                else:
+                    raise Exception("Parallel processing returned no results")
+                    
+            except Exception as e:
+                self.logger.error(f"Parallel processing failed: {e}")
+                if preview:
+                    print(f"❌ Parallel processing failed: {e}")
+                    print("💡 Trying sequential processing as fallback...")
+                
+                # Fallback to sequential processing with fewer articles
+                try:
+                    # Limit to first 3 articles for quick testing in fallback mode
+                    fallback_articles = all_articles[:3]
+                    if preview:
+                        print(f"🔄 Sequential fallback processing {len(fallback_articles)} articles...")
+                    
+                    processed_articles = self.process_multiple_articles(fallback_articles, preview)
+                    
+                    if processed_articles and len(processed_articles) > 0:
+                        if preview:
+                            print(f"✅ Sequential processing successful: {len(processed_articles)} articles processed")
+                    else:
+                        raise Exception("Sequential processing also returned no results")
+                        
+                except Exception as e2:
+                    self.logger.error(f"Sequential processing also failed: {e2}")
+                    if preview:
+                        print(f"❌ Sequential processing also failed: {e2}")
+                        print("💡 This could be due to:")
+                        print("   - Network connectivity issues")
+                        print("   - Perplexity API rate limits or errors")
+                        print("   - Article content extraction issues")
+                        print("   - Missing dependencies or configuration issues")
+                    return None
+            
+            if not processed_articles or len(processed_articles) == 0:
+                self.logger.error("No articles were successfully processed")
+                if preview:
+                    print("❌ No articles were successfully processed")
+                return None
+            
+            # Step 3: Generate comprehensive PDF report
+            if preview:
+                print(f"\n📄 STEP 3: Generating Comprehensive PDF Report")
+                print("-" * 50)
+
+            try:
+                pdf_path = self.generate_comprehensive_pdf_report(processed_articles, preview)
+            except Exception as e:
+                self.logger.error(f"Failed to generate PDF: {e}")
+                if preview:
+                    print(f"❌ Failed to generate PDF: {e}")
+                pdf_path = None
+
+            # Step 4: Generate website
+            if preview:
+                print(f"\n🌐 STEP 4: Generating Website")
+                print("-" * 50)
+            
+            try:
+                website_path = self.generate_website(processed_articles, pdf_path, preview)
+            except Exception as e:
+                self.logger.error(f"Failed to generate website: {e}")
+                if preview:
+                    print(f"❌ Failed to generate website: {e}")
+                website_path = None
+
+            total_time = time.time() - start_time
+            if preview:
+                print(f"\n✅ COMPREHENSIVE ANALYSIS COMPLETED!")
+                print("="*70)
+                print(f"📰 Total Articles Processed: {len(processed_articles)}")
+                if pdf_path:
+                    print(f"📄 Comprehensive PDF Report: {pdf_path}")
+                if website_path:
+                    print(f"🌐 Website: {website_path}")
+                print(f"📊 Total Analysis: {sum(len(a['summary'].split()) for a in processed_articles)} words")
+                print(f"⏱️  Total Time: {total_time:.1f} seconds")
+                if total_time > 0:
+                    print(f"⚡ Speed: {len(processed_articles)/total_time:.1f} articles/second")
+                print("="*70)
+
+            return {
+                "processed_articles": len(processed_articles),
+                "total_articles": len(all_articles),
+                "pdf_path": pdf_path,
+                "website_path": website_path,
+                "articles": processed_articles,
+                "total_time": total_time
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error in comprehensive analysis: {e}")
+            if preview:
+                print(f"\n❌ CRITICAL ERROR: {e}")
+                print("💡 Check the log file for more details:")
+                print(f"   cat {self.output_dir}/agent.log")
+            return None
+
+def start_scheduler():
+    """Start the scheduled execution of the agent."""
+    agent = B2BVaultAgent()
+    scheduler = BlockingScheduler()
     
-    parser = argparse.ArgumentParser(description='B2B Vault Comprehensive Scraper - Scrapes ALL articles')
-    parser.add_argument('--preview', action='store_true', help='Show preview output')
-    parser.add_argument('--limit', type=int, default=None, help='Limit number of articles to process (for testing)')
-    args = parser.parse_args()
+    # Run every hour
+    scheduler.add_job(
+        func=agent.run_full_analysis,
+        trigger='interval',
+        hours=1,
+        id='b2b_vault_analysis'
+    )
     
-    print("🚀 Starting COMPREHENSIVE B2B Vault scraping (ALL articles)")
-    print("📊 This will scrape every available article from B2B Vault")
+    print("Scheduler started. Agent will run every hour.")
+    print("Press Ctrl+C to stop.")
     
-    # Initialize and run comprehensive scraping
-    agent = B2BVaultAgent(max_workers=5)
+    try:
+        scheduler.start()
+    except KeyboardInterrupt:
+        print("Scheduler stopped.")
+
+if __name__ == "__main__":
+    # Optimized settings for speed
+    tabs_to_search = ["Sales"]
+    agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=5)  # Reduced workers for stability
     
-    # Collect ALL articles from ALL tabs
-    print(f"\n📑 Collecting articles from ALL categories...")
-    all_articles = agent.scrape_all_articles(preview=args.preview)
+    # Option 1: Just start the website server for existing data
+    # agent.start_website_server(preview=True)
     
-    if not all_articles:
-        print("❌ No articles found")
-        exit(1)
+    # Option 2: Enable debug mode
+    # agent.debug_card_structure(preview=True)
     
-    # Apply limit if specified (for testing)
-    if args.limit:
-        all_articles = all_articles[:args.limit]
-        print(f"⚠️ Limited to {len(all_articles)} articles for testing")
+    # Option 3: Run full comprehensive analysis
+    result = agent.run_comprehensive_analysis(preview=True)
     
-    print(f"\n📊 Total articles collected: {len(all_articles)}")
-    
-    # Process ALL articles
-    print(f"\n🤖 Processing ALL articles with AI analysis...")
-    processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=args.preview)
-    print(f"   Successfully processed: {len(processed_articles)} articles")
-    
-    if processed_articles:
-        # Generate comprehensive outputs
-        print(f"\n📄 Generating comprehensive PDF report...")
-        pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
-        
-        print(f"\n🌐 Generating advanced website with filtering...")
-        website_path = agent.generate_advanced_website(processed_articles, pdf_path, preview=args.preview)
-        
-        print(f"\n✅ Comprehensive scraping complete!")
-        print(f"   📊 Total articles: {len(all_articles)}")
-        print(f"   🤖 Processed articles: {len(processed_articles)}")
-        print(f"   📂 Categories: {len(set(a['tab'] for a in all_articles))}")
-        print(f"   📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
-        print(f"   📄 PDF: {pdf_path}")
-        print(f"   🌐 Website: {website_path}")
+    if result:
+        print(f"✅ Comprehensive analysis complete!")
+        print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
+        if result['pdf_path']:
+            print(f"📄 PDF saved to: {result['pdf_path']}")
+        if result['website_path']:
+            print(f"🌐 Website: {result['website_path']}")
     else:
-        print("❌ No articles were successfully processed")
+        print("❌ Analysis failed. Check logs for details.")
+        print(f"💡 Log file location: {agent.output_dir}/agent.log")
+        print("💡 Try running debug mode to see what's happening:")
+        print("   Uncomment the debug line in the script and run again")
+    
+    # Uncomment the next line if you want to start the scheduler after the analysis
+    # start_scheduler()

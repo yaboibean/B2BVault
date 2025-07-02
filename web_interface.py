@@ -333,7 +333,7 @@ def run_comprehensive_scraping():
         web_logger.add_message("🚀 Starting comprehensive B2B Vault scraping")
         web_logger.add_message("📊 Will collect ALL articles from ALL categories")
         
-        # Initialize agent for comprehensive scraping
+        # Initialize agent for comprehensive scraping - no tabs specified = ALL tabs
         agent = B2BVaultAgent(max_workers=5)
         
         # Step 1: Collect ALL articles
