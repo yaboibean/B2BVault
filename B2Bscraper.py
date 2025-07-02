@@ -1071,78 +1071,78 @@ class B2BVaultAgent:
             </div>
             
             <script>
-                function toggleArticle(index) {{
+                function toggleArticle(index) {
                     const fullDiv = document.getElementById('full-' + index);
                     const btn = event.target;
                     
-                    if (fullDiv.style.display === 'none') {{
+                    if (fullDiv.style.display === 'none') {
                         fullDiv.style.display = 'block';
                         btn.textContent = 'Show Less';
-                    }} else {{
+                    } else {
                         fullDiv.style.display = 'none';
                         btn.textContent = 'Read Full Summary';
-                    }}
-                }}
+                    }
+                }
                 
-                // Enhanced fuzzy search functionality
-                function fuzzySearch(searchTerm, text) {{
-                    var query = searchTerm.toLowerCase();
-                    var target = text.toLowerCase();
+                // Enhanced fuzzy search with typo tolerance
+                function fuzzySearch(searchTerm, text) {
+                    const query = searchTerm.toLowerCase();
+                    const target = text.toLowerCase();
                     
                     if (target.includes(query)) return 100;
                     
-                    var queryWords = query.split(/\\s+/).filter(function(word) {{ return word.length > 1; }});
-                    var score = 0;
-                    var matches = 0;
+                    const correctedQuery = autoCorrect(query);
+                    if (correctedQuery !== query && target.includes(correctedQuery)) return 90;
                     
-                    queryWords.forEach(function(word) {{
-                        if (target.includes(word)) {{
+                    const queryWords = query.split(/\s+/).filter(word => word.length > 1);
+                    let score = 0;
+                    let matches = 0;
+                    
+                    queryWords.forEach(word => {
+                        if (target.includes(word)) {
                             matches++;
                             score += 20;
-                        }} else {{
-                            // Check for partial matches and typos
-                            var similarity = calculateSimilarity(word, target);
-                            if (similarity > 0.6) {{
+                        } else {
+                            const similarity = findBestMatch(word, target);
+                            if (similarity > 0.6) {
                                 matches++;
                                 score += similarity * 15;
-                            }}
-                        }}
-                    }});
+                            }
+                        }
+                    });
                     
                     return score + (matches > 1 ? matches * 5 : 0);
-                }}
+                }
                 
-                function calculateSimilarity(str1, str2) {{
-                    if (str2.includes(str1)) return 0.8;
+                function autoCorrect(word) {
+                    const corrections = {
+                        'markting': 'marketing', 'slaes': 'sales', 'leadgen': 'lead generation',
+                        'ai': 'ai', 'convrsion': 'conversion', 'reveune': 'revenue',
+                        'pipleine': 'pipeline', 'outbond': 'outbound', 'linkedn': 'linkedin'
+                    };
+                    return corrections[word] || word;
+                }
+                
+                function findBestMatch(word, text) {
+                    if (word.length < 3) return 0;
+                    let bestMatch = 0;
+                    const textWords = text.split(/\s+/);
+                    
+                    textWords.forEach(textWord => {
+                        if (textWord.length >= 3) {
+                            const similarity = calculateSimilarity(word, textWord);
+                            if (similarity > bestMatch) bestMatch = similarity;
+                        }
+                    });
+                    
+                    return bestMatch;
+                }
+                
+                function calculateSimilarity(str1, str2) {
+                    if (str2.includes(str1) || str1.includes(str2)) return 0.8;
                     
                     const longer = str1.length > str2.length ? str1 : str2;
                     const shorter = str1.length > str2.length ? str2 : str1;
-                    
-                    if (longer.length === 0) return 1.0;
-                    
-                    let matches = 0;
-                    for (let i = 0; i < shorter.length; i++) {{
-                        if (longer.includes(shorter[i])) matches++;
-                    }}
-                    
-                    return matches / longer.length;
-                }}
-                
-                function searchArticles() {{
-                    const searchTerm = document.querySelector('.search-input').value.trim();
-                    const articles = document.querySelectorAll('.article-card');
-                    
-                    if (searchTerm.length === 0) {{
-                        articles.forEach(article => article.style.display = 'block');
-                        return;
-                    }}
-                    
-                    const searchResults = [];
-                    
-                    articles.forEach(article => {{
-                        const title = article.querySelector('.article-title').textContent;
-                        const content = article.textContent;
-                        const publisher = article.querySelector('.publisher')?.textContent || '';
                         
                         const titleScore = fuzzySearch(searchTerm, title) * 3;
                         const publisherScore = fuzzySearch(searchTerm, publisher) * 2;

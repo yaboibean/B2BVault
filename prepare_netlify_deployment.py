@@ -1002,6 +1002,12 @@ def prepare_netlify_deployment():
     }
     
     function generateSearchSuggestions(searchTerm) {
+        } else {
+            suggestionsDiv.style.display = 'none';
+        }
+    }
+    
+    function generateSearchSuggestions(searchTerm) {
         const commonTerms = [
             'sales', 'marketing', 'AI', 'lead generation', 'prospecting',
             'conversion', 'pipeline', 'revenue', 'growth', 'strategy',
