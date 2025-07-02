@@ -219,12 +219,31 @@
         <div class="tag-selection">
             <h2>📑 Select Tags to Scrape:</h2>
             <div class="tags-grid" id="tagsGrid">
-                {% for tag in available_tags %}
+                <!-- Static tags instead of Flask template -->
                 <div>
-                    <input type="checkbox" id="tag-{{ loop.index0 }}" class="tag-checkbox" value="{{ tag }}">
-                    <label for="tag-{{ loop.index0 }}" class="tag-label">{{ tag }}</label>
+                    <input type="checkbox" id="tag-0" class="tag-checkbox" value="All">
+                    <label for="tag-0" class="tag-label">All</label>
                 </div>
-                {% endfor %}
+                <div>
+                    <input type="checkbox" id="tag-1" class="tag-checkbox" value="Content Marketing">
+                    <label for="tag-1" class="tag-label">Content Marketing</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="tag-2" class="tag-checkbox" value="Sales">
+                    <label for="tag-2" class="tag-label">Sales</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="tag-3" class="tag-checkbox" value="AI">
+                    <label for="tag-3" class="tag-label">AI</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="tag-4" class="tag-checkbox" value="Marketing Ops">
+                    <label for="tag-4" class="tag-label">Marketing Ops</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="tag-5" class="tag-checkbox" value="Product Marketing">
+                    <label for="tag-5" class="tag-label">Product Marketing</label>
+                </div>
             </div>
         </div>
         
@@ -303,45 +322,26 @@
                 return;
             }
             
-            // Disable button and show progress
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('logContainer').style.display = 'block';
-            
-            // Start scraping
-            fetch('/start_scraping', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ tags: selectedTags })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showError(data.error);
-                    document.getElementById('startBtn').disabled = false;
-                    document.getElementById('progressContainer').style.display = 'none';
-                } else {
-                    // Start polling for status
-                    pollingInterval = setInterval(pollStatus, 1000);
-                }
-            })
-            .catch(error => {
-                showError('Failed to start scraping: ' + error);
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
-            });
+            // Show info message for static site
+            showError('⚠️ Static site detected. To actually run scraping:<br>1. Run "python3 web_interface.py" locally<br>2. Visit http://localhost:5000<br>3. Use the Flask interface for live scraping');
         }
         
-        function pollStatus() {
+        // Check if scraping is already running on page load
+        window.onload = function() {
             fetch('/status')
             .then(response => response.json())
             .then(data => {
-                updateProgress(data.progress, data.current_step);
-                
-                if (data.log_messages) {
-                    updateLogs(data.log_messages);
+                if (data.is_running) {
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('progressContainer').style.display = 'block';
+                    document.getElementById('logContainer').style.display = 'block';
+                    pollingInterval = setInterval(pollStatus, 1000);
+                }
+            });
+        };
+    </script>
+</body>
+</html>
                 }
                 
                 if (data.error) {
