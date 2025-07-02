@@ -439,3 +439,415 @@ class B2BVaultAgent:
         except Exception as e:
             self.logger.error(f"Error generating comprehensive PDF: {e}")
             raise
+
+    def generate_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
+        """Generate a static website to display all analyzed articles with search functionality."""
+        self.logger.info("Generating static website")
+        if preview:
+            print("🌐 Generating static website...")
+        
+        # Create website directory
+        website_dir = os.path.join(self.output_dir, "website")
+        os.makedirs(website_dir, exist_ok=True)
+        
+        # Generate article cards HTML
+        articles_html = ""
+        for i, article in enumerate(processed_articles):
+            summary_preview = article['summary'][:200] + "..." if len(article['summary']) > 200 else article['summary']
+            word_count = len(article['summary'].split())
+            publisher = article.get('publisher', 'Unknown Publisher')
+            
+            articles_html += f"""
+            <div class="article-card" id="article-{i}">
+                <div class="article-header">
+                    <h2 class="article-title">{article['title']}</h2>
+                    <div class="article-meta">
+                        <span class="tab-badge">{article['tab']}</span>
+                        <span class="publisher">📰 {publisher}</span>
+                        <span class="date">{article['scraped_at']}</span>
+                        <span class="word-count">{word_count} words</span>
+                    </div>
+                </div>
+                <div class="article-preview">
+                    <p>{summary_preview}</p>
+                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Summary</button>
+                </div>
+                <div class="article-full" id="full-{i}" style="display: none;">
+                    <div class="summary-content">
+                        {article['summary'].replace(chr(10), '<br>')}
+                    </div>
+                    <div class="article-link">
+                        <a href="{article['url']}" target="_blank" class="source-link">View Original Article</a>
+                    </div>
+                </div>
+            </div>
+            """
+        
+        # PDF download link
+        pdf_link = ""
+        if pdf_path and os.path.exists(pdf_path):
+            pdf_filename = os.path.basename(pdf_path)
+            # Copy PDF to website directory
+            import shutil
+            pdf_dest = os.path.join(website_dir, pdf_filename)
+            shutil.copy2(pdf_path, pdf_dest)
+            pdf_link = f'<a href="{pdf_filename}" class="btn btn-download" download>📄 Download PDF Report</a>'
+        
+        # Generate main HTML
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>B2B Vault Analysis - {len(processed_articles)} Articles</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f9;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 40px 20px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    margin: 0 0 10px 0;
+                    font-size: 2.5rem;
+                }}
+                .header p {{
+                    margin: 0;
+                    font-size: 1.1rem;
+                    opacity: 0.9;
+                }}
+                .container {{
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }}
+                .controls {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .search-bar {{
+                    display: flex;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                    flex-wrap: wrap;
+                }}
+                .search-input {{
+                    flex: 1;
+                    min-width: 300px;
+                    padding: 12px;
+                    font-size: 16px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                }}
+                .filter-buttons {{
+                    display: flex;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    margin-bottom: 15px;
+                }}
+                .filter-btn {{
+                    padding: 8px 16px;
+                    border: 2px solid #667eea;
+                    background: white;
+                    color: #667eea;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    transition: all 0.3s ease;
+                }}
+                .filter-btn:hover, .filter-btn.active {{
+                    background: #667eea;
+                    color: white;
+                }}
+                .btn-download {{
+                    background: #28a745;
+                    color: white;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                }}
+                .article-card {{
+                    background: white;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                    margin-bottom: 20px;
+                    padding: 20px;
+                    transition: transform 0.3s, box-shadow 0.3s;
+                }}
+                .article-card:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+                }}
+                .article-title {{
+                    font-size: 1.3rem;
+                    color: #2c3e50;
+                    margin: 0 0 15px 0;
+                    line-height: 1.4;
+                }}
+                .article-meta {{
+                    display: flex;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }}
+                .tab-badge {{
+                    background: #667eea;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                }}
+                .publisher, .date, .word-count {{
+                    color: #7f8c8d;
+                    font-size: 0.9rem;
+                }}
+                .article-preview p {{
+                    color: #34495e;
+                    line-height: 1.6;
+                    margin-bottom: 15px;
+                }}
+                .expand-btn {{
+                    background: #3498db;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                }}
+                .expand-btn:hover {{
+                    background: #2980b9;
+                }}
+                .article-full {{
+                    margin-top: 20px;
+                    padding-top: 20px;
+                    border-top: 1px solid #ecf0f1;
+                }}
+                .summary-content {{
+                    color: #2c3e50;
+                    line-height: 1.6;
+                    margin-bottom: 20px;
+                }}
+                .source-link {{
+                    background: #27ae60;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    text-decoration: none;
+                    font-size: 0.9rem;
+                }}
+                .source-link:hover {{
+                    background: #229954;
+                }}
+                .stats {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                    text-align: center;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .stats h3 {{
+                    margin: 0 0 15px 0;
+                    color: #2c3e50;
+                }}
+                .stats-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                    gap: 20px;
+                }}
+                .stat-item {{
+                    color: #7f8c8d;
+                }}
+                .stat-number {{
+                    font-size: 1.8rem;
+                    font-weight: bold;
+                    color: #667eea;
+                    display: block;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>📊 B2B Vault Analysis</h1>
+                <p>Comprehensive analysis of {len(processed_articles)} B2B articles with AI insights</p>
+            </div>
+            
+            <div class="container">
+                <div class="stats">
+                    <h3>📈 Analysis Overview</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-number">{len(processed_articles)}</span>
+                            <div>Articles Analyzed</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{len(set(a.get('tab', 'Unknown') for a in processed_articles))}</span>
+                            <div>Categories</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{len(set(a.get('publisher', 'Unknown') for a in processed_articles))}</span>
+                            <div>Publishers</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{sum(len(a.get('summary', '').split()) for a in processed_articles)}</span>
+                            <div>Total Insights</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <div class="search-bar">
+                        <input type="text" class="search-input" placeholder="🔍 Search articles by title, content, publisher, or category..." onkeyup="searchArticles()">
+                        {pdf_link}
+                    </div>
+                    
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterByTag('all')">All Articles</button>
+                        {' '.join([f'<button class="filter-btn" onclick="filterByTag(\'{tag}\')">{tag}</button>' for tag in sorted(set(a.get('tab', 'Unknown') for a in processed_articles))])}
+                    </div>
+                </div>
+                
+                <div class="articles-container">
+                    {articles_html}
+                </div>
+            </div>
+
+            <script>
+                let currentFilter = 'all';
+                
+                function toggleArticle(index) {{
+                    const fullDiv = document.getElementById('full-' + index);
+                    const btn = event.target;
+                    
+                    if (fullDiv.style.display === 'none') {{
+                        fullDiv.style.display = 'block';
+                        btn.textContent = 'Show Less';
+                    }} else {{
+                        fullDiv.style.display = 'none';
+                        btn.textContent = 'Read Full Summary';
+                    }}
+                }}
+                
+                function filterByTag(tag) {{
+                    currentFilter = tag;
+                    
+                    // Update button states
+                    document.querySelectorAll('.filter-btn').forEach(btn => {{
+                        btn.classList.remove('active');
+                    }});
+                    event.target.classList.add('active');
+                    
+                    // Filter articles
+                    const articles = document.querySelectorAll('.article-card');
+                    articles.forEach(article => {{
+                        const articleTag = article.querySelector('.tab-badge').textContent;
+                        if (tag === 'all' || articleTag === tag) {{
+                            article.style.display = 'block';
+                        }} else {{
+                            article.style.display = 'none';
+                        }}
+                    }});
+                    
+                    // Clear search when filtering
+                    document.querySelector('.search-input').value = '';
+                }}
+                
+                function searchArticles() {{
+                    const searchTerm = document.querySelector('.search-input').value.toLowerCase();
+                    const articles = document.querySelectorAll('.article-card');
+                    
+                    articles.forEach(article => {{
+                        const title = article.querySelector('.article-title').textContent.toLowerCase();
+                        const content = article.textContent.toLowerCase();
+                        const tag = article.querySelector('.tab-badge').textContent;
+                        
+                        const matchesSearch = searchTerm === '' || content.includes(searchTerm);
+                        const matchesFilter = currentFilter === 'all' || tag === currentFilter;
+                        
+                        if (matchesSearch && matchesFilter) {{
+                            article.style.display = 'block';
+                        }} else {{
+                            article.style.display = 'none';
+                        }}
+                    }});
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        
+        # Save the HTML file
+        html_path = os.path.join(website_dir, "index.html")
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        self.logger.info(f"Website generated: {html_path}")
+        if preview:
+            print(f"   ✅ Website saved to: {html_path}")
+        
+        return html_path
+
+# Command line interface for direct usage
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='B2B Vault Comprehensive Scraper')
+    parser.add_argument('--tags', type=str, default='Sales,Marketing,Growth,Product,Leadership,Strategy', 
+                        help='Comma-separated list of tags to scrape (default: all main tags)')
+    parser.add_argument('--preview', action='store_true', help='Show preview output')
+    args = parser.parse_args()
+    
+    # Parse tags
+    if args.tags.lower() == 'all':
+        tags = ["Sales", "Marketing", "Growth", "Product", "Leadership", "Strategy", "Customer Success", "Operations", "Finance", "HR", "Technology"]
+    else:
+        tags = [tag.strip() for tag in args.tags.split(',')]
+    
+    print(f"🚀 Starting B2B Vault scraper for tags: {', '.join(tags)}")
+    
+    # Initialize and run
+    agent = B2BVaultAgent(tabs_to_search=tags, max_workers=3)
+    
+    # Collect articles
+    all_articles = []
+    for tag in tags:
+        print(f"\n📑 Scraping {tag} articles...")
+        tag_articles = agent.navigate_to_tab_and_get_articles(tag, preview=args.preview)
+        all_articles.extend(tag_articles)
+        print(f"   Found {len(tag_articles)} articles")
+    
+    print(f"\n📊 Total articles found: {len(all_articles)}")
+    
+    if all_articles:
+        # Process articles
+        print(f"\n🤖 Processing articles with AI...")
+        processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=args.preview)
+        print(f"   Successfully processed: {len(processed_articles)} articles")
+        
+        if processed_articles:
+            # Generate outputs
+            print(f"\n📄 Generating PDF report...")
+            pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
+            
+            print(f"\n🌐 Generating website...")
+            website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
+            
+            print(f"\n✅ Scraping complete!")
+            print(f"   📄 PDF: {pdf_path}")
+            print(f"   🌐 Website: {website_path}")
+        else:
+            print("❌ No articles were successfully processed")
+    else:
+        print("❌ No articles found")
