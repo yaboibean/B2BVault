@@ -219,20 +219,20 @@
             <div class="setting-item">
                 <div class="setting-label">
                     📰 Number of articles to process:
-                    <small style="display: block; color: #6c757d;">How many random articles to analyze with AI</small>
+                    <small style="display: block; color: #6c757d;">How many random articles to analyze with AI (reduced for memory efficiency)</small>
                 </div>
-                <input type="number" id="articleLimit" class="setting-input" value="100" min="10" max="500">
+                <input type="number" id="articleLimit" class="setting-input" value="50" min="10" max="200">
             </div>
             
             <div class="setting-item">
                 <div class="setting-label">
                     🔄 Processing mode:
-                    <small style="display: block; color: #6c757d;">Parallel is faster but uses more memory</small>
+                    <small style="display: block; color: #6c757d;">Sequential is recommended for memory efficiency</small>
                 </div>
                 <select id="processingMode" class="setting-input" style="width: 120px;">
+                    <option value="sequential">Sequential</option>
                     <option value="auto">Auto</option>
                     <option value="parallel">Parallel</option>
-                    <option value="sequential">Sequential</option>
                 </select>
             </div>
         </div>
@@ -304,8 +304,8 @@
             const articleLimit = parseInt(document.getElementById('articleLimit').value);
             const processingMode = document.getElementById('processingMode').value;
             
-            if (articleLimit < 10 || articleLimit > 500) {
-                showError('Please set article limit between 10 and 500.');
+            if (articleLimit < 10 || articleLimit > 200) {  // Reduced max from 500 to 200
+                showError('Please set article limit between 10 and 200 for optimal memory usage.');
                 return;
             }
             

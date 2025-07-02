@@ -530,21 +530,27 @@ def run_smart_scraping_task(article_limit, processing_mode):
     try:
         scraping_status['is_running'] = True
         scraping_status['progress'] = 0
-        scraping_status['current_step'] = 'Initializing smart scraping...'
+        scraping_status['current_step'] = 'Initializing memory-optimized scraping...'
         scraping_status['error'] = None
         scraping_status['log_messages'] = []
         web_logger.messages = []
         
-        web_logger.add_message(f"🎲 Starting smart scraping with {article_limit} articles")
-        web_logger.add_message(f"⚙️ Processing mode: {processing_mode}")
+        # Cap article limit for memory efficiency
+        if article_limit > 100:
+            article_limit = 100
+            web_logger.add_message(f"⚠️ Article limit capped at 100 for memory efficiency")
         
-        # Initialize agent for smart scraping
-        agent = B2BVaultAgent(max_workers=2)
+        web_logger.add_message(f"🎲 Starting memory-optimized scraping with {article_limit} articles")
+        web_logger.add_message(f"⚙️ Processing mode: {processing_mode}")
+        web_logger.add_message(f"💾 Optimized for lower memory usage")
+        
+        # Initialize agent for memory-optimized scraping
+        agent = B2BVaultAgent(max_workers=2)  # Always use 2 workers for memory efficiency
         
         # Step 1: Discover and randomly select articles
         scraping_status['current_step'] = f'Discovering articles and randomly selecting {article_limit}...'
         scraping_status['progress'] = 10
-        web_logger.add_message("📂 Scanning B2B Vault homepage for all articles...")
+        web_logger.add_message("📂 Scanning B2B Vault homepage for articles...")
         
         all_articles = agent.scrape_all_articles_from_homepage(preview=False, max_articles=article_limit)
         
@@ -555,24 +561,20 @@ def run_smart_scraping_task(article_limit, processing_mode):
         web_logger.add_message(f"📂 Categories: {len(set(a['tab'] for a in all_articles))}")
         web_logger.add_message(f"📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
         
-        # Step 2: Process articles based on mode
+        # Step 2: Process articles based on mode (prefer sequential for memory)
         scraping_status['current_step'] = 'Processing articles with AI...'
         scraping_status['progress'] = 50
         
-        if processing_mode == "sequential":
-            web_logger.add_message("🔄 Using sequential processing (slower but more stable)")
-            processed_articles = agent.process_multiple_articles(all_articles, preview=False)
-        elif processing_mode == "parallel":
-            web_logger.add_message("⚡ Using parallel processing (faster)")
-            processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
-        else:  # auto
-            web_logger.add_message("🤖 Auto-selecting processing mode...")
+        if processing_mode == "parallel":
+            web_logger.add_message("⚡ Using parallel processing (higher memory usage)")
             try:
                 processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
-                web_logger.add_message("✅ Parallel processing successful")
             except Exception as e:
                 web_logger.add_message(f"⚠️ Parallel failed, switching to sequential: {str(e)}")
-                processed_articles = agent.process_multiple_articles(all_articles[:20], preview=False)
+                processed_articles = agent.process_multiple_articles(all_articles[:25], preview=False)
+        else:  # sequential or auto - prefer sequential for memory
+            web_logger.add_message("🔄 Using sequential processing (memory-efficient)")
+            processed_articles = agent.process_multiple_articles(all_articles, preview=False)
         
         if not processed_articles:
             raise Exception("No articles were successfully processed")
@@ -610,7 +612,7 @@ def run_smart_scraping_task(article_limit, processing_mode):
             'processing_mode': processing_mode,
             'article_limit': article_limit
         }
-        web_logger.add_message("🎉 Smart scraping completed successfully!")
+        web_logger.add_message("🎉 Memory-optimized scraping completed successfully!")
         
     except Exception as e:
         scraping_status['error'] = str(e)
