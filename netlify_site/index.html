@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+        <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
@@ -906,7 +907,7 @@
                     </div>
                 </div>
             </div>
-                
+            
                 </div>
                 
                 <div class="footer">
@@ -935,41 +936,23 @@
                         btn.textContent = 'Read Full Summary';
                     }
                 }
-
+                
                 function searchArticles() {
                     const searchTerm = document.querySelector('.search-input').value.toLowerCase();
-                    const articles = Array.from(document.querySelectorAll('.article-card'));
-                    let titleMatches = [];
-                    let bodyMatches = [];
-
+                    const articles = document.querySelectorAll('.article-card');
+                    
                     articles.forEach(article => {
                         const title = article.querySelector('.article-title').textContent.toLowerCase();
                         const content = article.textContent.toLowerCase();
-
-                        if (searchTerm === "") {
+                        
+                        if (title.includes(searchTerm) || content.includes(searchTerm)) {
                             article.style.display = 'block';
-                            titleMatches.push(article);
-                        } else if (title.includes(searchTerm)) {
-                            article.style.display = 'block';
-                            titleMatches.push(article);
-                        } else if (content.includes(searchTerm)) {
-                            article.style.display = 'block';
-                            bodyMatches.push(article);
                         } else {
                             article.style.display = 'none';
                         }
                     });
-
-                    // Reorder: show title matches first, then body matches
-                    const grid = document.getElementById('articles-grid');
-                    if (grid) {
-                        // Remove all articles
-                        while (grid.firstChild) grid.removeChild(grid.firstChild);
-                        // Append title matches first, then body matches
-                        titleMatches.forEach(a => grid.appendChild(a));
-                        bodyMatches.forEach(a => grid.appendChild(a));
-                    }
                 }
             </script>
         </body>
         </html>
+        
