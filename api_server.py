@@ -22,8 +22,8 @@ scraping_status = {
     'log_messages': []
 }
 
-def run_smart_scraping_task(article_limit=40):
-    """Run the smart scraping task with random article selection - reduced memory usage"""
+def run_smart_scraping_task(article_limit=100):
+    """Run the smart scraping task with random article selection"""
     global scraping_status
     
     try:
@@ -32,8 +32,8 @@ def run_smart_scraping_task(article_limit=40):
         scraping_status['current_step'] = 'Initializing smart scraping...'
         scraping_status['error'] = None
         
-        # Initialize agent for smart scraping with reduced workers
-        agent = B2BVaultAgent(max_workers=1)
+        # Initialize agent for smart scraping
+        agent = B2BVaultAgent(max_workers=2)
         
         scraping_status['current_step'] = f'Discovering and randomly selecting {article_limit} articles...'
         scraping_status['progress'] = 20
@@ -44,20 +44,15 @@ def run_smart_scraping_task(article_limit=40):
         if not all_articles:
             raise Exception("No articles found on homepage")
         
-        scraping_status['current_step'] = 'Processing articles with AI in small batches...'
+        scraping_status['current_step'] = 'Processing articles with AI...'
         scraping_status['progress'] = 60
         
-        # Step 2: Process with AI in small batches (memory efficient)
-        processed_articles = []
-        batch_size = 4
-        for i in range(0, len(all_articles), batch_size):
-            batch = all_articles[i:i+batch_size]
-            try:
-                batch_processed = agent.process_multiple_articles(batch, preview=False)
-                processed_articles.extend(batch_processed)
-            except Exception as e:
-                # Skip failed batches and continue
-                continue
+        # Step 2: Process with AI
+        try:
+            processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
+        except Exception as e:
+            # Fallback to sequential processing
+            processed_articles = agent.process_multiple_articles(all_articles[:20], preview=False)
         
         if not processed_articles:
             raise Exception("No articles were successfully processed")
@@ -92,11 +87,7 @@ def start_scraping():
         return jsonify({'error': 'Scraping already running'}), 400
     
     data = request.get_json()
-    article_limit = data.get('article_limit', 40) if data else 40  # Reduced default
-    
-    # Ensure reasonable limits for memory efficiency
-    if article_limit > 60:
-        article_limit = 60
+    article_limit = data.get('article_limit', 100) if data else 100
     
     thread = threading.Thread(target=run_smart_scraping_task, args=(article_limit,))
     thread.daemon = True

@@ -221,7 +221,7 @@
                     📰 Number of articles to process:
                     <small style="display: block; color: #6c757d;">How many random articles to analyze with AI</small>
                 </div>
-                <input type="number" id="articleLimit" class="setting-input" value="40" min="10" max="60">
+                <input type="number" id="articleLimit" class="setting-input" value="100" min="10" max="500">
             </div>
             
             <div class="setting-item">
@@ -304,8 +304,8 @@
             const articleLimit = parseInt(document.getElementById('articleLimit').value);
             const processingMode = document.getElementById('processingMode').value;
             
-            if (articleLimit < 10 || articleLimit > 60) {
-                showError('Please set article limit between 10 and 60 for memory efficiency.');
+            if (articleLimit < 10 || articleLimit > 500) {
+                showError('Please set article limit between 10 and 500.');
                 return;
             }
             
