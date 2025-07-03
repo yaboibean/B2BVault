@@ -22,7 +22,7 @@ scraping_status = {
     'log_messages': []
 }
 
-def run_smart_scraping_task(article_limit=100):
+def run_smart_scraping_task(article_limit=30):  # Reduced default
     """Run the smart scraping task with random article selection"""
     global scraping_status
     
@@ -32,8 +32,8 @@ def run_smart_scraping_task(article_limit=100):
         scraping_status['current_step'] = 'Initializing smart scraping...'
         scraping_status['error'] = None
         
-        # Initialize agent for smart scraping
-        agent = B2BVaultAgent(max_workers=2)
+        # Initialize agent for smart scraping with minimal workers
+        agent = B2BVaultAgent(max_workers=1)
         
         scraping_status['current_step'] = f'Discovering and randomly selecting {article_limit} articles...'
         scraping_status['progress'] = 20
@@ -47,12 +47,8 @@ def run_smart_scraping_task(article_limit=100):
         scraping_status['current_step'] = 'Processing articles with AI...'
         scraping_status['progress'] = 60
         
-        # Step 2: Process with AI
-        try:
-            processed_articles = agent.process_multiple_articles_parallel(all_articles, preview=False)
-        except Exception as e:
-            # Fallback to sequential processing
-            processed_articles = agent.process_multiple_articles(all_articles[:20], preview=False)
+        # Step 2: Process with AI (sequential only for memory efficiency)
+        processed_articles = agent.process_multiple_articles(all_articles, preview=False)
         
         if not processed_articles:
             raise Exception("No articles were successfully processed")
@@ -87,7 +83,13 @@ def start_scraping():
         return jsonify({'error': 'Scraping already running'}), 400
     
     data = request.get_json()
-    article_limit = data.get('article_limit', 100) if data else 100
+    article_limit = data.get('article_limit', 30) if data else 30  # Reduced default
+    
+    # Ensure reasonable limits
+    if article_limit < 5:
+        article_limit = 5
+    elif article_limit > 50:
+        article_limit = 50
     
     thread = threading.Thread(target=run_smart_scraping_task, args=(article_limit,))
     thread.daemon = True

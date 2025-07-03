@@ -1463,7 +1463,7 @@ if __name__ == "__main__":
                         self.logger.error(f"Error with selector {selector}: {e}")
                         continue
                 
-                self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles from {len(seen_urls)} URLs")
+                self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles")
                 
                 # Randomly select articles if we have more than max_articles
                 if len(all_articles) > max_articles:
@@ -1706,7 +1706,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='B2B Vault Smart Scraper - Processes random articles efficiently')
     parser.add_argument('--preview', action='store_true', help='Show detailed preview output')
-    parser.add_argument('--limit', type=int, default=40, help='Number of random articles to process (default: 40)')
+    parser.add_argument('--limit', type=int, default=30, help='Number of random articles to process (default: 30)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     args = parser.parse_args()
     
@@ -1733,21 +1733,38 @@ if __name__ == "__main__":
     print(f"✅ {len(all_articles)} articles selected for processing.")
     
     # Process in small batches to keep memory low
-    batch_size = 4
+    batch_size = 3  # Reduced batch size
     processed_articles = []
     total_batches = (len(all_articles) + batch_size - 1) // batch_size
+    
     for i in range(0, len(all_articles), batch_size):
         batch = all_articles[i:i+batch_size]
-        print(f"\n📦 Processing batch {i//batch_size+1}/{total_batches} ({len(batch)} articles)...")
+        batch_num = i//batch_size + 1
+        print(f"\n📦 Processing batch {batch_num}/{total_batches} ({len(batch)} articles)...")
+        
+        # Process the batch
         batch_processed = agent.process_multiple_articles(batch, preview=args.preview)
-        processed_articles.extend(batch_processed)
-        print(f"   ✅ Batch complete: {len(batch_processed)} articles processed")
+        
+        if batch_processed:  # Only add if articles were actually processed
+            processed_articles.extend(batch_processed)
+            print(f"   ✅ Batch {batch_num} complete: {len(batch_processed)} articles processed")
+        else:
+            print(f"   ⚠️ Batch {batch_num} failed: no articles processed")
+        
         time.sleep(2)  # Short pause to reduce memory pressure
     
     print(f"\n🎉 All batches complete! {len(processed_articles)} articles processed.")
     
+    if not processed_articles:
+        print("❌ No articles were successfully processed. Check logs for errors.")
+        exit(1)
+    
     # Generate outputs
-    pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
-    website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
-    print(f"📄 PDF saved to: {pdf_path}")
-    print(f"🌐 Website: {website_path}")
+    try:
+        pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
+        website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
+        print(f"📄 PDF saved to: {pdf_path}")
+        print(f"🌐 Website: {website_path}")
+    except Exception as e:
+        print(f"❌ Error generating outputs: {e}")
+        exit(1)
