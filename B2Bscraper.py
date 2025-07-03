@@ -155,11 +155,12 @@ class B2BVaultAgent:
     An intelligent agent that scrapes B2B Vault, analyzes content, and generates reports.
     """
     
-    def __init__(self, output_dir: str = "scraped_data", tabs_to_search: List[str] = ["Sales"], max_workers: int = 5):
+    def __init__(self, output_dir: str = "scraped_data", tabs_to_search: List[str] = None, max_workers: int = 5):
         """Initialize the B2B Vault agent."""
         self.output_dir = output_dir
-        self.tabs_to_search = tabs_to_search
-        self.max_workers = max_workers  # For parallel processing
+        # If no tabs specified, get ALL available tabs automatically
+        self.tabs_to_search = tabs_to_search or self.get_all_available_tabs()
+        self.max_workers = max_workers
         os.makedirs(output_dir, exist_ok=True)
         
         # Setup logging
@@ -173,14 +174,61 @@ class B2BVaultAgent:
         )
         self.logger = logging.getLogger(__name__)
 
+    def get_all_available_tabs(self):
+        """Automatically discover all available tabs on B2B Vault."""
+        all_tabs = [
+            "Content Marketing", "Demand Generation", "ABM & GTM", "Paid Marketing",
+            "Marketing Ops", "Event Marketing", "AI", "Product Marketing", "Sales",
+            "General", "Affiliate & Partnerships", "Copy & Positioning", "Leadership",
+            "Strategy", "Customer Success", "Operations", "Finance", "HR", "Technology"
+        ]
+        return all_tabs
+
+    def scrape_all_articles(self, preview: bool = False):
+        """Scrape ALL articles from ALL tabs on B2B Vault."""
+        if preview:
+            print("🌐 Starting comprehensive B2B Vault scraping...")
+            print(f"📂 Will scrape from {len(self.tabs_to_search)} categories")
+        
+        all_articles = []
+        successful_tabs = []
+        
+        for i, tab_name in enumerate(self.tabs_to_search):
+            if preview:
+                print(f"\n📑 [{i+1}/{len(self.tabs_to_search)}] Scraping {tab_name}...")
+            
+            try:
+                tab_articles = self.navigate_to_tab_and_get_articles(tab_name, preview)
+                if tab_articles:
+                    all_articles.extend(tab_articles)
+                    successful_tabs.append(tab_name)
+                    if preview:
+                        print(f"   ✅ Found {len(tab_articles)} articles in {tab_name}")
+                else:
+                    if preview:
+                        print(f"   ⚠️ No articles found in {tab_name}")
+            except Exception as e:
+                if preview:
+                    print(f"   ❌ Error scraping {tab_name}: {e}")
+                continue
+        
+        if preview:
+            print(f"\n🎯 Scraping Summary:")
+            print(f"   📊 Total articles collected: {len(all_articles)}")
+            print(f"   ✅ Successful tabs: {len(successful_tabs)}")
+            print(f"   📂 Categories: {', '.join(successful_tabs)}")
+        
+        return all_articles
+
     def navigate_to_tab_and_get_articles(self, tab_name: str, preview: bool = False):
-        """Navigate to specified tab and collect article URLs with speed optimizations."""
+        """Navigate to tab and collect ALL article URLs (no limits)."""
         articles = []
         seen_urls = set()
+        
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=not preview,
-                args=['--disable-blink-features=AutomationControlled', '--no-sandbox']  # Faster browser
+                args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
             )
             page = browser.new_page()
             
@@ -188,49 +236,56 @@ class B2BVaultAgent:
                 self.logger.info(f"Navigating to B2B Vault - {tab_name} tab")
                 if preview:
                     print(f"🌐 Opening {BASE_URL} - {tab_name} tab")
-                page.goto(BASE_URL, timeout=20000)  # Further reduced timeout
-                
-                # Skip cookie handling for speed
-                page.wait_for_timeout(500)  # Minimal wait
+                page.goto(BASE_URL, timeout=30000)
+                page.wait_for_timeout(1000)
                 
                 # Navigate to specified tab
                 self.logger.info(f"Clicking on {tab_name} tab")
                 if preview:
                     print(f"📑 Navigating to {tab_name} tab")
-                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=5000)
+                page.wait_for_selector(f"a[data-w-tab='{tab_name}']", timeout=10000)
                 tab = page.locator(f"a[data-w-tab='{tab_name}']")
                 tab.click()
-                page.wait_for_timeout(1000)  # Reduced wait time
+                page.wait_for_timeout(2000)
                 
-                # Faster, aggressive scrolling
+                # Aggressive scrolling to load ALL content
                 self.logger.info("Loading articles by scrolling")
                 if preview:
-                    print("📜 Fast scrolling to load articles...")
+                    print("📜 Aggressive scrolling to load ALL articles...")
                 
-                # Scroll to bottom immediately, then check if more content loads
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(2000)  # Wait for dynamic content
+                # More aggressive scrolling strategy
+                previous_count = 0
+                scroll_attempts = 0
+                max_scroll_attempts = 20
                 
-                # One more scroll to catch any remaining content
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(1000)
+                while scroll_attempts < max_scroll_attempts:
+                    # Scroll to bottom
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(3000)  # Wait for dynamic content
+                    
+                    # Check if more content loaded
+                    current_count = page.locator("div.w-dyn-item").count()
+                    if current_count == previous_count:
+                        scroll_attempts += 1
+                    else:
+                        scroll_attempts = 0  # Reset if new content loaded
+                        previous_count = current_count
+                    
+                    if preview and scroll_attempts == 0:
+                        print(f"      📄 Loaded {current_count} items so far...")
                 
-                if preview:
-                    print("   ✅ Fast scroll completed")
-                
-                # Process cards with optimized extraction
+                # Process ALL cards
                 cards = page.locator("div.w-dyn-item")
-                count = cards.count()
-                self.logger.info(f"Found {count} article cards")
-                if preview:
-                    print(f"🔍 Found {count} article cards, fast filtering for {tab_name} articles...")
+                total_count = cards.count()
                 
-                # Process all cards at once without batching for speed
-                for i in range(count):
+                if preview:
+                    print(f"      🔍 Processing {total_count} total cards...")
+                
+                for i in range(total_count):
                     try:
                         card = cards.nth(i)
                         
-                        # Fast tag checking
+                        # Check if article matches current tab
                         is_target_article = False
                         try:
                             tag_elements = card.locator("div.text-block-3").all()
@@ -245,7 +300,7 @@ class B2BVaultAgent:
                         if not is_target_article:
                             continue
                         
-                        # Fast URL extraction
+                        # Get URL
                         href = None
                         try:
                             buttons = card.locator("a.button-primary-small").all()
@@ -254,26 +309,12 @@ class B2BVaultAgent:
                         except:
                             continue
                         
-                        # Quick duplicate check and add
                         if href and href.startswith("http") and href not in seen_urls:
                             seen_urls.add(href)
                             
-                            # Fast title/publisher extraction
-                        try:
                             title = safe_get_title(card)
                             publisher = safe_get_publisher(card)
-                            
-                            # Debug output
-                            if preview and len(articles) < 5:  # Show first 5 for debugging
-                                print(f"   DEBUG - Extracted title: '{title}'")
-                                print(f"   DEBUG - Extracted publisher: '{publisher}'")
-                        except Exception as e:
-                            title = f"Article {len(articles) + 1} from {tab_name}"
-                            publisher = "Unknown Publisher"
-                            if preview:
-                                print(f"   DEBUG - Title extraction failed: {e}")
 
-                            
                             articles.append({
                                 "title": title,
                                 "publisher": publisher,
@@ -281,15 +322,11 @@ class B2BVaultAgent:
                                 "tab": tab_name,
                                 "scraped_at": time.strftime('%Y-%m-%d %H:%M:%S')
                             })
-                            
-                            if preview and len(articles) <= 10:  # Show fewer for speed
-                                print(f"   📰 Article {len(articles)}: {title[:40]}...")
-                    except:
+                    except Exception as e:
                         continue
                 
-                self.logger.info(f"Collected {len(articles)} unique {tab_name} articles")
                 if preview:
-                    print(f"✅ Collected {len(articles)} unique {tab_name} articles")
+                    print(f"      ✅ Collected {len(articles)} unique {tab_name} articles")
                 
             except Exception as e:
                 self.logger.error(f"Error navigating to {tab_name} tab: {e}")
@@ -347,37 +384,51 @@ class B2BVaultAgent:
 
     async def process_articles_batch_async(self, articles_batch: List[Dict], preview: bool = False) -> List[Dict]:
         """Process a batch of articles asynchronously with parallel scraping and API calls."""
+        self.logger.debug(f"Starting async batch processing for {len(articles_batch)} articles")
         processed_articles = []
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
+            self.logger.debug("Browser context created for batch processing")
             
             # Scrape all articles in parallel
             scrape_tasks = []
-            for article in articles_batch:
+            for i, article in enumerate(articles_batch):
+                self.logger.debug(f"Creating scrape task for article {i+1}: {article['title'][:50]}...")
                 task = self.scrape_article_content_async(article['url'], context)
                 scrape_tasks.append((article, task))
             
+            self.logger.info(f"Created {len(scrape_tasks)} parallel scraping tasks")
+            
             # Wait for all scraping to complete
             scraped_results = []
-            for article, task in scrape_tasks:
+            for i, (article, task) in enumerate(scrape_tasks):
                 try:
+                    self.logger.debug(f"Awaiting scrape task {i+1}/{len(scrape_tasks)}")
                     content = await task
                     if content:
                         scraped_results.append((article, content))
+                        self.logger.debug(f"Successfully scraped article: {article['title'][:50]}...")
+                    else:
+                        self.logger.warning(f"No content returned for article: {article['title']}")
                 except Exception as e:
                     self.logger.error(f"Error scraping article '{article['title']}': {e}")
                     continue
             
             await browser.close()
+            self.logger.info(f"Article scraping complete: {len(scraped_results)}/{len(articles_batch)} articles scraped successfully")
         
         # Now process Perplexity API calls in parallel using ThreadPoolExecutor
         if scraped_results:
+            self.logger.info(f"Starting Perplexity API processing for {len(scraped_results)} articles")
+            
             def process_single_article(article_content_pair):
                 article, content = article_content_pair
                 try:
+                    self.logger.debug(f"Sending to Perplexity: {article['title'][:50]}...")
                     summary = self.send_to_perplexity(content, preview=False)
+                    self.logger.debug(f"Perplexity analysis complete for: {article['title'][:50]}...")
                     return {
                         **article,
                         'content': content,
@@ -389,23 +440,32 @@ class B2BVaultAgent:
             
             # Use ThreadPoolExecutor for parallel API calls
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(self.max_workers, 5)) as executor:
+                self.logger.debug(f"Created thread pool with {min(self.max_workers, 5)} workers")
                 results = list(executor.map(process_single_article, scraped_results))
                 processed_articles = [r for r in results if r is not None]
+                
+            self.logger.info(f"Perplexity processing complete: {len(processed_articles)} articles processed")
         
         return processed_articles
 
     def process_multiple_articles_parallel(self, articles: List[Dict], preview: bool = False) -> List[Dict]:
         """Process multiple articles using parallel execution with optimized batching."""
+        self.logger.info(f"Starting parallel processing of {len(articles)} articles")
         if preview:
             print(f"\n🔄 Processing {len(articles)} articles in parallel...")
         
         # Smaller batches for better parallelization
-        batch_size = min(self.max_workers, 8)  # Smaller batches
+        batch_size = min(self.max_workers, 8)
         article_batches = [articles[i:i + batch_size] for i in range(0, len(articles), batch_size)]
+        
+        self.logger.info(f"Created {len(article_batches)} batches of size {batch_size}")
+        if preview:
+            print(f"📦 Created {len(article_batches)} batches for parallel processing")
         
         all_processed_articles = []
         
         for batch_idx, batch in enumerate(article_batches):
+            self.logger.info(f"Processing batch {batch_idx + 1}/{len(article_batches)} with {len(batch)} articles")
             if preview:
                 print(f"\n📦 Processing batch {batch_idx + 1}/{len(article_batches)} ({len(batch)} articles)...")
             
@@ -414,25 +474,31 @@ class B2BVaultAgent:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
+                self.logger.debug(f"Starting async processing for batch {batch_idx + 1}")
                 processed_batch = loop.run_until_complete(
                     self.process_articles_batch_async(batch, preview)
                 )
                 all_processed_articles.extend(processed_batch)
                 
+                self.logger.info(f"Batch {batch_idx + 1} completed: {len(processed_batch)}/{len(batch)} articles processed successfully")
                 if preview:
                     print(f"   ✅ Batch {batch_idx + 1} completed: {len(processed_batch)}/{len(batch)} articles processed")
                 
             except Exception as e:
                 self.logger.error(f"Error processing batch {batch_idx + 1}: {e}")
+                if preview:
+                    print(f"   ❌ Error processing batch {batch_idx + 1}: {e}")
             finally:
                 loop.close()
-            
-            # No delay between batches since we're using smaller batches
+                self.logger.debug(f"Event loop closed for batch {batch_idx + 1}")
         
+        self.logger.info(f"Parallel processing complete: {len(all_processed_articles)} total articles processed")
         return all_processed_articles
 
     def send_to_perplexity(self, article_content: str, preview: bool = False) -> str:
         """Send article content to Perplexity API with faster settings and strict TL;DR ending."""
+        self.logger.debug("Preparing Perplexity API request")
+        
         url = "https://api.perplexity.ai/chat/completions"
         headers = {
             "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
@@ -442,15 +508,17 @@ class B2BVaultAgent:
         # Stronger instructions for TL;DR
         prompt = f"""
         Analyze this B2B sales article and provide:
-        1. A 2-sentence TL;DR at the very top. Each sentence must be complete, self-contained, and end with a period or other proper punctuation. Never let a TL;DR sentence trail off or end with '...' or incomplete thoughts.
+        1. A short 1-sentence TL;DR at the very top. Each sentence must be complete, self-contained, and end with a period or other proper punctuation. it should be around 40 words.
         2. 3-5 key takeaways
         3. Notable companies/technologies
         4. 3-5 actionable recommendations for B2B sales
 
         Do not use any formatting (no bold, italics, or markdown). Do not mention the prompt or instructions in your answer.
 
+        Make sure to use indenting to make it the easiest it can be to read.
+
         NO BOLD OR ITALICS. NO MARKDOWN. NO FORMATTING. JUST TEXT AND SPACING (numbers for lists are fine).
-        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT.
+        NO CITATIONS. NO SOURCES. NO REFERENCES. JUST THE CONTENT. JUST PLAIN TEXT, NOTHING MORE -- no bold or italics, no markdown, no formatting, just text and spacing (numbers for lists are fine).
 
         Article:
          
@@ -468,10 +536,15 @@ class B2BVaultAgent:
         }
         
         try:
+            self.logger.debug("Sending request to Perplexity API")
             response = requests.post(url, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
+            
+            self.logger.debug(f"Perplexity API response received: {response.status_code}")
             result = response.json()
             summary = result["choices"][0]["message"]["content"]
+            
+            self.logger.debug(f"Generated summary length: {len(summary)} characters")
 
             # --- Post-process TL;DR to remove trailing '...' if present ---
             # Find the TL;DR (first two sentences)
@@ -559,6 +632,65 @@ class B2BVaultAgent:
             self.logger.error(f"Error generating PDF: {e}")
             raise
 
+    def scrape_article_content(self, article_url: str, preview: bool = False) -> str:
+        """Synchronous version of article content scraping for fallback processing."""
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                
+                page.goto(article_url, timeout=20000)
+                page.wait_for_load_state("domcontentloaded")
+                
+                # Get content
+                content = page.content()
+                browser.close()
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract title
+                title_selectors = ["h1", ".article-title", ".post-title", "title"]
+                title = "Untitled"
+                for selector in title_selectors:
+                    title_elem = soup.select_one(selector)
+                    if title_elem and title_elem.get_text(strip=True):
+                        title = title_elem.get_text(strip=True)
+                        break
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract title
+                title_selectors = ["h1", ".article-title", ".post-title", "title"]
+                title = "Untitled"
+                for selector in title_selectors:
+                    title_elem = soup.select_one(selector)
+                    if title_elem and title_elem.get_text(strip=True):
+                        title = title_elem.get_text(strip=True)
+                        break
+                
+                # Extract article body
+                body_selectors = [
+                    "article", ".article-content", ".post-content", 
+                    ".content", "main", ".rich-text"
+                ]
+                
+                body_text = ""
+                for selector in body_selectors:
+                    body_elem = soup.select_one(selector)
+                    if body_elem:
+                        body_text = body_elem.get_text("\n", strip=True)
+                        break
+                
+                if not body_text:
+                    paragraphs = soup.find_all("p")
+                    body_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                
+                return f"Title: {title}\n\nContent:\n{body_text}"
+                
+        except Exception as e:
+            self.logger.error(f"Error scraping article {article_url}: {e}")
+            return ""
+
     def process_multiple_articles(self, articles: List[Dict], preview: bool = False) -> List[Dict]:
         """Process multiple articles and return their summaries."""
         processed_articles = []
@@ -640,117 +772,76 @@ class B2BVaultAgent:
         <head>
             <meta charset="UTF-8">
             <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-            body {{
-                font-family: 'Inter', Arial, sans-serif;
-                max-width: 900px;
-                margin: 0 auto;
-                padding: 30px 10px 30px 10px;
-                line-height: 1.7;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: #222;
-            }}
-            .header {{
-                background: linear-gradient(90deg, #667eea 60%, #764ba2 100%);
-                color: #fff;
-                padding: 35px 20px 30px 20px;
-                border-radius: 18px;
-                margin-bottom: 40px;
-                box-shadow: 0 8px 32px rgba(102,126,234,0.10);
-                text-align: center;
-            }}
-            h1 {{
-                font-size: 2.7rem;
-                font-weight: 700;
-                margin-bottom: 10px;
-                letter-spacing: -1px;
-                text-shadow: 0 2px 8px rgba(76, 81, 255, 0.08);
-            }}
-            .header p {{
-                font-size: 1.15rem;
-                margin: 7px 0;
-                opacity: 0.97;
-            }}
-            h2 {{
-                color: #667eea;
-                border-bottom: 2px solid #e3e6f3;
-                padding-bottom: 8px;
-                margin-top: 32px;
-                font-size: 1.35rem;
-                font-weight: 600;
-            }}
-            h3 {{
-                color: #764ba2;
-                margin-top: 22px;
-                font-size: 1.08rem;
-                font-weight: 600;
-            }}
-            .article-section {{
-                margin-bottom: 45px;
-                padding: 28px 22px 22px 22px;
-                border-radius: 14px;
-                background: rgba(255,255,255,0.98);
-                box-shadow: 0 4px 18px rgba(102,126,234,0.07);
-                border-left: 7px solid #667eea;
-                transition: box-shadow 0.2s;
-            }}
-            .article-section:hover {{
-                box-shadow: 0 8px 32px rgba(102,126,234,0.13);
-            }}
-            .article-meta {{
-                background: linear-gradient(90deg, #e8eafc 60%, #f3e8fc 100%);
-                padding: 13px 18px;
-                border-radius: 7px;
-                margin-bottom: 18px;
-                font-size: 0.98rem;
-                color: #3d3d3d;
-            }}
-            .article-meta p {{
-                margin: 4px 0;
-            }}
-            .article-summary {{
-                background: #f8f9fa;
-                padding: 18px 18px 14px 18px;
-                border-radius: 7px;
-                border-left: 4px solid #764ba2;
-                font-size: 1.01rem;
-                color: #2d2d2d;
-            }}
-            .page-break {{
-                page-break-before: always;
-            }}
-            a {{
-                color: #667eea;
-                text-decoration: none;
-                transition: color 0.2s;
-            }}
-            a:hover {{
-                color: #764ba2;
-                text-decoration: underline;
-            }}
-            @media (max-width: 700px) {{
                 body {{
-                padding: 10px 2px;
-                }}
-                .header {{
-                padding: 22px 7px 18px 7px;
-                font-size: 1.1rem;
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    line-height: 1.6;
                 }}
                 h1 {{
-                font-size: 1.5rem;
+                    color: #2c3e50;
+                    border-bottom: 3px solid #3498db;
+                    padding-bottom: 15px;
+                    text-align: center;
+                }}
+                h2 {{
+                    color: #34495e;
+                    border-bottom: 2px solid #ecf0f1;
+                    padding-bottom: 10px;
+                    margin-top: 30px;
+                }}
+                h3 {{
+                    color: #2980b9;
+                    margin-top: 25px;
+                }}
+                .header {{
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                    text-align: center;
                 }}
                 .article-section {{
-                padding: 13px 7px 10px 7px;
+                    margin-bottom: 40px;
+                    padding: 20px;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    background-color: #fafafa;
                 }}
-            }}
+                .article-meta {{
+                    background-color: #e8f4f8;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }}
+                .article-meta p {{
+                    margin: 5px 0;
+                }}
+                .article-summary {{
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    border-left: 4px solid #3498db;
+                }}
+                .page-break {{
+                    page-break-before: always;
+                }}
+                a {{
+                    color: #3498db;
+                    text-decoration: none;
+                }}
+                a:hover {{
+                    text-decoration: underline;
+                }}
             </style>
         </head>
         <body>
             <div class="header">
-            <h1>🚀 B2B Vault Comprehensive Analysis Report</h1>
-            <p><strong>Total Articles Analyzed:</strong> {len(processed_articles)}</p>
-            <p><strong>Generated:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
-            <p><strong>Tabs Searched:</strong> {', '.join(self.tabs_to_search)}</p>
+                <h1>B2B Vault Comprehensive Analysis Report</h1>
+                <p><strong>Total Articles Analyzed:</strong> {len(processed_articles)}</p>
+                <p><strong>Generated:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p><strong>Tabs Searched:</strong> {', '.join(self.tabs_to_search)}</p>
             </div>
             {articles_html}
         </body>
@@ -772,7 +863,7 @@ class B2BVaultAgent:
             self.logger.error(f"Error generating comprehensive PDF: {e}")
             raise
 
-    def generate_website(self, processed_articles: List[Dict], preview: bool = False):
+    def generate_website(self, processed_articles: List[Dict], pdf_path: str = None, preview: bool = False):
         """Generate a static website to display all analyzed articles."""
         self.logger.info("Generating static website")
         if preview:
@@ -802,7 +893,7 @@ class B2BVaultAgent:
                 </div>
                 <div class="article-preview">
                     <p>{summary_preview}</p>
-                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Analysis</button>
+                    <button class="expand-btn" onclick="toggleArticle({i})">Read Full Summary</button>
                 </div>
                 <div class="article-full" id="full-{i}" style="display: none;">
                     <div class="summary-content">
@@ -811,40 +902,6 @@ class B2BVaultAgent:
                     <div class="article-link">
                         <a href="{article['url']}" target="_blank" class="source-link">View Original Article</a>
                     </div>
-                </div>
-            </div>
-            """
-        
-        # Generate main HTML
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>B2B Vault Analysis Dashboard</title>
-            <style>
-                * {{
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }}
-                
-                body {{
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                }}
-                
-                .container {{
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    padding: 20px;
-                }}
-                
-                .header {{
                     text-align: center;
                     color: white;
                     margin-bottom: 40px;
@@ -1046,6 +1103,14 @@ class B2BVaultAgent:
                 
                 <div class="footer">
                     <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')} | Powered by Perplexity AI</p>
+                    {f'''<div style="margin-top: 15px;">
+                        <a href="../{os.path.basename(pdf_path)}" 
+                           class="source-link" 
+                           download
+                           style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 10px;">
+                           📄 Download PDF Report
+                        </a>
+                    </div>''' if pdf_path and os.path.exists(pdf_path) else ''}
                 </div>
             </div>
             
@@ -1059,7 +1124,7 @@ class B2BVaultAgent:
                         btn.textContent = 'Show Less';
                     }} else {{
                         fullDiv.style.display = 'none';
-                        btn.textContent = 'Read Full Analysis';
+                        btn.textContent = 'Read Full Summary';
                     }}
                 }}
                 
@@ -1264,79 +1329,337 @@ if __name__ == "__main__":
                 input("Press Enter to close browser...")  # Wait for user
                 browser.close()
 
-    def run_comprehensive_analysis(self, preview: bool = False):
-        """Run comprehensive analysis for all specified tabs with speed optimizations."""
+    def scrape_all_articles_from_homepage(self, preview: bool = False, max_articles: int = 100):
+        """Scrape articles from the B2B Vault homepage and randomly select a subset."""
+        if preview:
+            print("🌐 Starting B2B Vault homepage scraping...")
+            print(f"📄 Will collect article links and randomly select {max_articles} for processing")
+        
+        self.logger.info(f"Starting homepage scraping process (max {max_articles} articles)")
+        all_articles = []
+        seen_urls = set()
+        
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=not preview,
+                args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
+            )
+            page = browser.new_page()
+            
+            try:
+                self.logger.info(f"Navigating to B2B Vault homepage: {BASE_URL}")
+                if preview:
+                    print(f"🌐 Opening {BASE_URL}")
+                
+                page.goto(BASE_URL, timeout=30000)
+                self.logger.info("Successfully loaded homepage")
+                page.wait_for_timeout(2000)
+                
+                # Check initial article count
+                initial_count = page.locator("div.w-dyn-item").count()
+                self.logger.info(f"Initial article count on page: {initial_count}")
+                if preview:
+                    print(f"📊 Found {initial_count} articles initially loaded")
+                
+                # Light scrolling to load some dynamic content (not aggressive)
+                if preview:
+                    print("📜 Light scrolling to load additional articles...")
+                
+                self.logger.info("Starting light scroll to load some dynamic content")
+                previous_count = 0
+                scroll_attempts = 0
+                max_scroll_attempts = 3  # Reduced from 5 to 3
+                
+                while scroll_attempts < max_scroll_attempts:
+                    # Scroll to bottom
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(2000)  # Reduced wait time
+                    
+                    # Check if more content loaded by counting article cards
+                    current_count = page.locator("div.w-dyn-item").count()
+                    
+                    if current_count == previous_count:
+                        scroll_attempts += 1
+                        self.logger.debug(f"No new content loaded, attempt {scroll_attempts}/{max_scroll_attempts}")
+                    else:
+                        scroll_attempts = 0  # Reset if new content loaded
+                        previous_count = current_count
+                        self.logger.info(f"New content loaded: {current_count} total articles")
+                    
+                    if preview and scroll_attempts == 0:
+                        print(f"      📄 Loaded {current_count} articles so far...")
+                
+                final_count = page.locator("div.w-dyn-item").count()
+                self.logger.info(f"Scrolling complete. Final article count: {final_count}")
+                if preview:
+                    print(f"📊 Scrolling complete: {final_count} total articles found")
+                
+                # Find ALL "Read Full Article" or similar buttons on the page
+                article_selectors = [
+                    "a.button-primary-small",  # Main button selector
+                    "a[href*='http']:has-text('Read Full')",  # Any link with "Read Full"
+                    "a[href*='http']:has-text('Read Article')",  # Any link with "Read Article"
+                    "a[href*='http']:has-text('Full Article')",  # Any link with "Full Article"
+                ]
+                
+                self.logger.info(f"Searching for article links using {len(article_selectors)} selectors")
+                
+                for selector_idx, selector in enumerate(article_selectors):
+                    try:
+                        self.logger.debug(f"Trying selector {selector_idx + 1}/{len(article_selectors)}: {selector}")
+                        buttons = page.locator(selector).all()
+                        self.logger.info(f"Selector '{selector}' found {len(buttons)} links")
+                        
+                        if preview:
+                            print(f"🔍 Found {len(buttons)} links with selector: {selector}")
+                        
+                        for i, button in enumerate(buttons):
+                            try:
+                                href = button.get_attribute("href")
+                                if href and href.startswith("http") and href not in seen_urls:
+                                    seen_urls.add(href)
+                                    self.logger.debug(f"Processing new article URL: {href}")
+                                    
+                                    # Try to get title and publisher from the parent card
+                                    parent_card = button.locator("xpath=./ancestor::div[contains(@class, 'w-dyn-item')]").first
+                                    
+                                    if parent_card:
+                                        title = safe_get_title(parent_card)
+                                        publisher = safe_get_publisher(parent_card)
+                                        
+                                        # Try to determine category from the card content
+                                        tab = "General"  # Default category
+                                        try:
+                                            tag_elements = parent_card.locator("div.text-block-3").all()
+                                            if tag_elements:
+                                                tag_text = tag_elements[0].inner_text().strip()
+                                                if tag_text:
+                                                    tab = tag_text.split()[0]
+                                                    self.logger.debug(f"Detected category: {tab}")
+                                        except Exception as e:
+                                            self.logger.debug(f"Could not extract category: {e}")
+                                    else:
+                                        title = f"Article {len(all_articles) + 1}"
+                                        publisher = "Unknown Publisher"
+                                        tab = "General"
+                                        self.logger.warning(f"Could not find parent card for URL: {href}")
+                                    
+                                    article_data = {
+                                        "title": title,
+                                        "publisher": publisher,
+                                        "url": href,
+                                        "tab": tab,
+                                        "scraped_at": time.strftime('%Y-%m-%d %H:%M:%S')
+                                    }
+                                    all_articles.append(article_data)
+                                    
+                                    self.logger.debug(f"Added article {len(all_articles)}: '{title}' from {publisher}")
+                                    
+                            except Exception as e:
+                                self.logger.error(f"Error processing button {i}: {e}")
+                                continue
+                                
+                    except Exception as e:
+                        self.logger.error(f"Error with selector {selector}: {e}")
+                        continue
+                
+                self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles from {len(seen_urls)} URLs")
+                
+                # Randomly select articles if we have more than max_articles
+                if len(all_articles) > max_articles:
+                    import random
+                    random.shuffle(all_articles)
+                    selected_articles = all_articles[:max_articles]
+                    self.logger.info(f"Randomly selected {max_articles} articles from {len(all_articles)} total articles")
+                    if preview:
+                        print(f"🎲 Randomly selected {max_articles} articles from {len(all_articles)} total articles")
+                        print(f"📊 This ensures faster processing and prevents memory issues")
+                else:
+                    selected_articles = all_articles
+                    self.logger.info(f"Using all {len(all_articles)} articles (less than {max_articles} limit)")
+                    if preview:
+                        print(f"📊 Using all {len(all_articles)} articles (less than {max_articles} limit)")
+                
+                if preview:
+                    print(f"\n🎯 Homepage Scraping Summary:")
+                    print(f"   📊 Total articles discovered: {len(all_articles)}")
+                    print(f"   🎲 Articles selected for processing: {len(selected_articles)}")
+                    print(f"   📂 Categories represented: {len(set(a['tab'] for a in selected_articles))}")
+                    print(f"   📰 Publishers found: {len(set(a['publisher'] for a in selected_articles))}")
+                
+            except Exception as e:
+                self.logger.error(f"Critical error during homepage scraping: {e}")
+                if preview:
+                    print(f"❌ Error scraping homepage: {e}")
+                raise
+            finally:
+                browser.close()
+                self.logger.info("Browser closed successfully")
+        
+        return selected_articles
+
+    def run_comprehensive_analysis(self, preview: bool = False, max_articles: int = 100):
+        """Run comprehensive analysis by scraping random articles from homepage."""
         try:
             start_time = time.time()
-            self.logger.info("Starting comprehensive B2B Vault analysis workflow")
+            self.logger.info("=" * 70)
+            self.logger.info(f"STARTING B2B VAULT ANALYSIS ({max_articles} RANDOM ARTICLES)")
+            self.logger.info("=" * 70)
+            
             if preview:
                 print("\n" + "="*70)
-                print("🚀 B2B VAULT COMPREHENSIVE ANALYSIS WORKFLOW STARTING")
-                print(f"📑 Tabs to search: {', '.join(self.tabs_to_search)}")
+                print(f"🚀 B2B VAULT SMART SCRAPING ({max_articles} RANDOM ARTICLES)")
+                print("📄 Will randomly select articles for faster processing")
                 print(f"⚡ Max parallel workers: {self.max_workers}")
                 print("="*70)
             
-            all_articles = []
+            # Step 1: Collect random articles from homepage
+            self.logger.info("STEP 1: Article Collection Phase")
+            if preview:
+                print(f"\n📑 STEP 1: Collecting {max_articles} random articles from homepage...")
             
-            # Step 1: Collect articles from all specified tabs
-            for tab in self.tabs_to_search:
-                if preview:
-                    print(f"\n📋 STEP 1.{self.tabs_to_search.index(tab)+1}: Collecting {tab} Articles")
-                    print("-" * 50)
-                
-                tab_articles = self.navigate_to_tab_and_get_articles(tab, preview)
-                all_articles.extend(tab_articles)
-                
-                if preview:
-                    print(f"✅ Found {len(tab_articles)} articles in {tab} tab")
+            all_articles = self.scrape_all_articles_from_homepage(preview, max_articles=max_articles)
             
             if not all_articles:
-                self.logger.error("No articles found in any specified tabs")
+                self.logger.error("No articles found on homepage - analysis cannot continue")
+                if preview:
+                    print("❌ No articles found on homepage")
+                    print("💡 Check if B2B Vault website structure has changed")
                 return None
             
+            self.logger.info(f"Article collection complete: {len(all_articles)} articles selected")
+            
             if preview:
-                print(f"\n📊 TOTAL UNIQUE ARTICLES FOUND: {len(all_articles)}")
+                print(f"\n📊 SELECTED ARTICLES FOR PROCESSING: {len(all_articles)}")
                 print("-" * 50)
-                for i, article in enumerate(all_articles[:15]):
-                    print(f"{i+1}. [{article['tab']}] {article['title'][:60]}{'...' if len(article['title']) > 60 else ''}")
-                if len(all_articles) > 15:
-                    print(f"... and {len(all_articles) - 15} more articles")
+                categories = set(a['tab'] for a in all_articles)
+                publishers = set(a['publisher'] for a in all_articles)
+                print(f"📂 Categories: {', '.join(sorted(categories))}")
+                print(f"📰 Publishers: {', '.join(sorted(publishers))}")
+                print("\n📋 Sample articles:")
+                for i, article in enumerate(all_articles[:10]):
+                    print(f"  {i+1}. [{article['tab']}] {article['title'][:60]}{'...' if len(article['title']) > 60 else ''}")
+                if len(all_articles) > 10:
+                    print(f"  ... and {len(all_articles) - 10} more articles")
             
-            # Step 2: Process all articles in parallel
+            # Step 2: Process selected articles
+            self.logger.info("STEP 2: Article Processing Phase")
             if preview:
-                print(f"\n🔄 STEP 2: Processing All Articles (Parallel)")
+                print(f"\n🔄 STEP 2: Processing {len(all_articles)} Selected Articles with AI")
                 print("-" * 50)
             
-            processed_articles = self.process_multiple_articles_parallel(all_articles, preview)
+            processed_articles = []
             
-            if not processed_articles:
+            # Try parallel processing first
+            try:
+                self.logger.info("Attempting parallel processing")
+                if preview:
+                    print("🚀 Attempting parallel processing...")
+                
+                processed_articles = self.process_multiple_articles_parallel(all_articles, preview)
+                
+                if processed_articles and len(processed_articles) > 0:
+                    self.logger.info(f"Parallel processing successful: {len(processed_articles)} articles processed")
+                    if preview:
+                        print(f"✅ Parallel processing successful: {len(processed_articles)} articles processed")
+                else:
+                    raise Exception("Parallel processing returned no results")
+                    
+            except Exception as e:
+                self.logger.error(f"Parallel processing failed: {e}")
+                self.logger.info("Attempting sequential processing fallback")
+                if preview:
+                    print(f"❌ Parallel processing failed: {e}")
+                    print("💡 Trying sequential processing as fallback...")
+                
+                # Fallback to sequential processing with fewer articles
+                try:
+                    fallback_articles = all_articles[:10]  # Process only first 10 in fallback
+                    self.logger.info(f"Sequential fallback processing {len(fallback_articles)} articles")
+                    if preview:
+                        print(f"🔄 Sequential fallback processing {len(fallback_articles)} articles...")
+                    
+                    processed_articles = self.process_multiple_articles(fallback_articles, preview)
+                    
+                    if processed_articles and len(processed_articles) > 0:
+                        self.logger.info(f"Sequential processing successful: {len(processed_articles)} articles processed")
+                        if preview:
+                            print(f"✅ Sequential processing successful: {len(processed_articles)} articles processed")
+                    else:
+                        raise Exception("Sequential processing also returned no results")
+                        
+                except Exception as e2:
+                    self.logger.error(f"Sequential processing also failed: {e2}")
+                    if preview:
+                        print(f"❌ Sequential processing also failed: {e2}")
+                        print("💡 This could be due to:")
+                        print("   - Network connectivity issues")
+                        print("   - Perplexity API rate limits or errors")
+                        print("   - Article content extraction issues")
+                        print("   - Missing dependencies or configuration issues")
+                    return None
+            
+            if not processed_articles or len(processed_articles) == 0:
                 self.logger.error("No articles were successfully processed")
+                if preview:
+                    print("❌ No articles were successfully processed")
                 return None
             
             # Step 3: Generate comprehensive PDF report
+            self.logger.info("STEP 3: PDF Report Generation Phase")
             if preview:
                 print(f"\n📄 STEP 3: Generating Comprehensive PDF Report")
                 print("-" * 50)
 
-            pdf_path = self.generate_comprehensive_pdf_report(processed_articles, preview)
+            try:
+                pdf_path = self.generate_comprehensive_pdf_report(processed_articles, preview)
+                self.logger.info(f"PDF report generated successfully: {pdf_path}")
+            except Exception as e:
+                self.logger.error(f"Failed to generate PDF: {e}")
+                if preview:
+                    print(f"❌ Failed to generate PDF: {e}")
+                pdf_path = None
 
             # Step 4: Generate website
+            self.logger.info("STEP 4: Website Generation Phase")
             if preview:
-                print(f"\n🌐 STEP 4: Generating Website")
+                print(f"\n🌐 STEP 4: Generating Interactive Website")
                 print("-" * 50)
             
-            website_path = self.generate_website(processed_articles, preview)
+            try:
+                website_path = self.generate_website(processed_articles, pdf_path, preview)
+                self.logger.info(f"Website generated successfully: {website_path}")
+            except Exception as e:
+                self.logger.error(f"Failed to generate website: {e}")
+                if preview:
+                    print(f"❌ Failed to generate website: {e}")
+                website_path = None
 
             total_time = time.time() - start_time
+            
+            # Final summary
+            self.logger.info("=" * 70)
+            self.logger.info("SMART ANALYSIS COMPLETED SUCCESSFULLY")
+            self.logger.info(f"Total articles processed: {len(processed_articles)} (randomly selected)")
+            self.logger.info(f"Total time: {total_time:.1f} seconds")
+            self.logger.info(f"Processing speed: {len(processed_articles)/total_time:.2f} articles/second")
+            self.logger.info("=" * 70)
+            
             if preview:
-                print(f"\n✅ COMPREHENSIVE ANALYSIS COMPLETED!")
+                print(f"\n✅ SMART ANALYSIS COMPLETED!")
                 print("="*70)
-                print(f"📰 Total Articles Processed: {len(processed_articles)}")
-                print(f"📄 Comprehensive PDF Report: {pdf_path}")
-                print(f"🌐 Website: {website_path}")
-                print(f"📊 Total Analysis: {sum(len(a['summary'].split()) for a in processed_articles)} words")
+                print(f"🎲 Articles Selected: {len(all_articles)} (randomly sampled)")
+                print(f"🤖 Articles Processed: {len(processed_articles)}")
+                print(f"📂 Categories: {len(set(a['tab'] for a in all_articles))}")
+                print(f"📰 Publishers: {len(set(a['publisher'] for a in all_articles))}")
+                if pdf_path:
+                    print(f"📄 PDF Report: {pdf_path}")
+                if website_path:
+                    print(f"🌐 Website: {website_path}")
+                print(f"📊 Total Analysis: {sum(len(a['summary'].split()) for a in processed_articles):,} words")
                 print(f"⏱️  Total Time: {total_time:.1f} seconds")
-                print(f"⚡ Speed: {len(processed_articles)/total_time:.1f} articles/second")
+                if total_time > 0:
+                    print(f"⚡ Speed: {len(processed_articles)/total_time:.2f} articles/second")
                 print("="*70)
 
             return {
@@ -1349,9 +1672,12 @@ if __name__ == "__main__":
             }
 
         except Exception as e:
-            self.logger.error(f"Error in comprehensive analysis: {e}")
+            self.logger.error(f"CRITICAL ERROR in comprehensive analysis: {e}")
+            self.logger.error(f"Error occurred at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
             if preview:
-                print(f"\n❌ ERROR: {e}")
+                print(f"\n❌ CRITICAL ERROR: {e}")
+                print("💡 Check the log file for more details:")
+                print(f"   cat {self.output_dir}/agent.log")
             return None
 
 def start_scheduler():
@@ -1376,26 +1702,52 @@ def start_scheduler():
         print("Scheduler stopped.")
 
 if __name__ == "__main__":
-    # Optimized settings for speed
-    tabs_to_search = ["Sales"]
-    agent = B2BVaultAgent(tabs_to_search=tabs_to_search, max_workers=10)  # More workers
+    import argparse
     
-    # Option 1: Just start the website server for existing data
-    # agent.start_website_server(preview=True)
+    parser = argparse.ArgumentParser(description='B2B Vault Smart Scraper - Processes random articles efficiently')
+    parser.add_argument('--preview', action='store_true', help='Show detailed preview output')
+    parser.add_argument('--limit', type=int, default=40, help='Number of random articles to process (default: 40)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    args = parser.parse_args()
     
-    # Option 2: Enable debug mode
-    # agent.debug_card_structure(preview=True)
+    # Set logging level based on verbose flag
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("🔍 Verbose logging enabled")
     
-    # Option 3: Run full comprehensive analysis
-    result = agent.run_comprehensive_analysis(preview=True)
+    print("🚀 Starting MEMORY-EFFICIENT B2B Vault scraping")
+    print(f"🎲 Will randomly select {args.limit} articles for processing")
+    print(f"⚙️  Preview mode: {'ON' if args.preview else 'OFF'}")
+    print(f"⚙️  Verbose logging: {'ON' if args.verbose else 'OFF'}")
+    print("-" * 50)
     
-    if result:
-        print(f"✅ Comprehensive analysis complete!")
-        print(f"📊 {result['processed_articles']}/{result['total_articles']} articles successfully processed")
-        print(f"📄 PDF saved to: {result['pdf_path']}")
-        print(f"🌐 Website: {result['website_path']}")
-    else:
-        print("❌ Analysis failed. Check logs for details.")
+    # Use only 1 worker for minimal memory usage
+    agent = B2BVaultAgent(max_workers=1)
     
-    # Uncomment the next line if you want to start the scheduler after the analysis
-    # start_scheduler()
+    # Collect random articles
+    all_articles = agent.scrape_all_articles_from_homepage(preview=args.preview, max_articles=args.limit)
+    if not all_articles:
+        print("❌ No articles found. Exiting.")
+        exit(1)
+    
+    print(f"✅ {len(all_articles)} articles selected for processing.")
+    
+    # Process in small batches to keep memory low
+    batch_size = 4
+    processed_articles = []
+    total_batches = (len(all_articles) + batch_size - 1) // batch_size
+    for i in range(0, len(all_articles), batch_size):
+        batch = all_articles[i:i+batch_size]
+        print(f"\n📦 Processing batch {i//batch_size+1}/{total_batches} ({len(batch)} articles)...")
+        batch_processed = agent.process_multiple_articles(batch, preview=args.preview)
+        processed_articles.extend(batch_processed)
+        print(f"   ✅ Batch complete: {len(batch_processed)} articles processed")
+        time.sleep(2)  # Short pause to reduce memory pressure
+    
+    print(f"\n🎉 All batches complete! {len(processed_articles)} articles processed.")
+    
+    # Generate outputs
+    pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
+    website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
+    print(f"📄 PDF saved to: {pdf_path}")
+    print(f"🌐 Website: {website_path}")
