@@ -962,6 +962,12 @@ class B2BVaultAgent:
                     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
                     gap: 30px;
                     margin-top: 30px;
+                    transition: all 0.3s ease;
+                }}
+                
+                .articles-grid.search-mode {{
+                    display: flex;
+                    flex-direction: column;
                 }}
                 
                 .article-card {{
@@ -973,146 +979,21 @@ class B2BVaultAgent:
                     border-left: 5px solid #667eea;
                 }}
                 
-                .article-card:hover {{
-                    transform: translateY(-5px);
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+                .article-card.title-match {{
+                    border-left: 5px solid #e74c3c;
+                    box-shadow: 0 8px 25px rgba(231, 76, 60, 0.2);
                 }}
                 
-                .article-title {{
-                    color: #2c3e50;
-                    margin-bottom: 15px;
-                    font-size: 1.3rem;
-                    line-height: 1.4;
+                .article-card.content-match {{
+                    border-left: 5px solid #f39c12;
+                    box-shadow: 0 8px 25px rgba(243, 156, 18, 0.1);
                 }}
                 
-                .article-meta {{
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 15px;
-                    flex-wrap: wrap;
-                }}
-                
-                .tab-badge {{
-                    background: #667eea;
-                    color: white;
-                    padding: 4px 12px;
-                    border-radius: 20px;
-                    font-size: 0.8rem;
-                    font-weight: bold;
-                }}
-                
-                .date, .word-count, .publisher {{
-                    color: #666;
-                    font-size: 0.9rem;
-                    padding: 4px 8px;
-                    background: #f8f9fa;
-                    border-radius: 15px;
-                }}
-                
-                .article-preview p {{
-                    margin-bottom: 15px;
-                    color: #555;
-                    line-height: 1.6;
-                }}
-                
-                .expand-btn, .source-link {{
-                    background: #667eea;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-block;
-                    transition: background 0.3s ease;
-                    font-size: 0.9rem;
-                }}
-                
-                .expand-btn:hover, .source-link:hover {{
-                    background: #5a6fd8;
-                }}
-                
-                .article-full {{
-                    margin-top: 20px;
-                    padding-top: 20px;
-                    border-top: 1px solid #eee;
-                }}
-                
-                .summary-content {{
-                    margin-bottom: 20px;
-                    line-height: 1.7;
-                    color: #444;
-                }}
-                
-                .article-link {{
-                    text-align: center;
-                }}
-                
-                .footer {{
-                    text-align: center;
-                    color: white;
-                    margin-top: 50px;
-                    padding: 20px;
-                    opacity: 0.8;
-                }}
-                
-                @media (max-width: 768px) {{
-                    .articles-grid {{
-                        grid-template-columns: 1fr;
-                    }}
-                    
-                    .header h1 {{
-                        font-size: 2rem;
-                    }}
-                    
-                    .stats {{
-                        gap: 15px;
-                    }}
-                }}
+                /* ...rest of existing styles... */
             </style>
         </head>
         <body>
-            <div class="container">
-                <div class="header">
-                    <h1>B2B Vault Analysis Dashboard</h1>
-                    <p>B2B Vault articles summaries</p>
-                    
-                    <div class="stats">
-                        <div class="stat-card">
-                            <span class="stat-number">{len(processed_articles)}</span>
-                            <span>Articles Analyzed</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-number">{sum(len(a['summary'].split()) for a in processed_articles):,}</span>
-                            <span>Total Words</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-number">{len(set(a['tab'] for a in processed_articles))}</span>
-                            <span>Categories</span>
-                        </div>
-                    </div>
-                    
-                    <div class="search-box">
-                        <input type="text" class="search-input" placeholder="Search articles..." onkeyup="searchArticles()">
-                    </div>
-                </div>
-                
-                <div class="articles-grid" id="articles-grid">
-                    {articles_html}
-                </div>
-                
-                <div class="footer">
-                    <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')} | Powered by Perplexity AI</p>
-                    {f'''<div style="margin-top: 15px;">
-                        <a href="../{os.path.basename(pdf_path)}" 
-                           class="source-link" 
-                           download
-                           style="background: #e74c3c; padding: 12px 24px; font-size: 1rem; text-decoration: none; border-radius: 30px; display: inline-block; margin: 10px;">
-                           📄 Download PDF Report
-                        </a>
-                    </div>''' if pdf_path and os.path.exists(pdf_path) else ''}
-                </div>
-            </div>
+            <!-- ...existing HTML structure... -->
             
             <script>
                 function toggleArticle(index) {{
@@ -1131,16 +1012,66 @@ class B2BVaultAgent:
                 function searchArticles() {{
                     const searchTerm = document.querySelector('.search-input').value.toLowerCase();
                     const articles = document.querySelectorAll('.article-card');
+                    const articlesGrid = document.getElementById('articles-grid');
                     
-                    articles.forEach(article => {{
+                    if (!searchTerm.trim()) {{
+                        // Reset to grid view and show all articles
+                        articlesGrid.classList.remove('search-mode');
+                        articles.forEach(article => {{
+                            article.style.display = 'block';
+                            article.style.order = 'initial';
+                            article.classList.remove('title-match', 'content-match');
+                        }});
+                        return;
+                    }}
+                    
+                    // Switch to search mode (flex layout)
+                    articlesGrid.classList.add('search-mode');
+                    
+                    // Create arrays for different match priorities
+                    let titleMatches = [];
+                    let contentMatches = [];
+                    let noMatches = [];
+                    
+                    articles.forEach((article, index) => {{
                         const title = article.querySelector('.article-title').textContent.toLowerCase();
                         const content = article.textContent.toLowerCase();
                         
-                        if (title.includes(searchTerm) || content.includes(searchTerm)) {{
-                            article.style.display = 'block';
+                        // Reset classes
+                        article.classList.remove('title-match', 'content-match');
+                        
+                        if (title.includes(searchTerm)) {{
+                            // Priority 1: Title contains search term
+                            article.classList.add('title-match');
+                            titleMatches.push({{element: article, index: index}});
+                        }} else if (content.includes(searchTerm)) {{
+                            // Priority 2: Content contains search term
+                            article.classList.add('content-match');
+                            contentMatches.push({{element: article, index: index}});
                         }} else {{
-                            article.style.display = 'none';
+                            // No match - hide
+                            noMatches.push({{element: article, index: index}});
                         }}
+                    }});
+                    
+                    // Hide all non-matching articles
+                    noMatches.forEach(item => {{
+                        item.element.style.display = 'none';
+                    }});
+                    
+                    // Show and reorder matching articles
+                    let order = 1;
+                    
+                    // First show title matches (highest priority) - red border
+                    titleMatches.forEach(item => {{
+                        item.element.style.display = 'block';
+                        item.element.style.order = order++;
+                    }});
+                    
+                    // Then show content matches (lower priority) - orange border
+                    contentMatches.forEach(item => {{
+                        item.element.style.display = 'block';
+                        item.element.style.order = order++;
                     }});
                 }}
             </script>
@@ -1463,7 +1394,7 @@ if __name__ == "__main__":
                         self.logger.error(f"Error with selector {selector}: {e}")
                         continue
                 
-                self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles from {len(seen_urls)} URLs")
+                self.logger.info(f"Article collection complete. Found {len(all_articles)} unique articles")
                 
                 # Randomly select articles if we have more than max_articles
                 if len(all_articles) > max_articles:
@@ -1682,6 +1613,75 @@ if __name__ == "__main__":
 
 def start_scheduler():
     """Start the scheduled execution of the agent."""
+    agent = B2BVaultAgent()
+    scheduler = BlockingScheduler()
+    
+    # Run every hour
+    scheduler.add_job(
+        func=agent.run_full_analysis,
+        trigger='interval',
+        hours=1,
+        id='b2b_vault_analysis'
+    )
+    
+    print("Scheduler started. Agent will run every hour.")
+    print("Press Ctrl+C to stop.")
+    
+    try:
+        scheduler.start()
+    except KeyboardInterrupt:
+        print("Scheduler stopped.")
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='B2B Vault Smart Scraper - Processes random articles efficiently')
+    parser.add_argument('--preview', action='store_true', help='Show detailed preview output')
+    parser.add_argument('--limit', type=int, default=40, help='Number of random articles to process (default: 40)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    args = parser.parse_args()
+    
+    # Set logging level based on verbose flag
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        print("🔍 Verbose logging enabled")
+    
+    print("🚀 Starting MEMORY-EFFICIENT B2B Vault scraping")
+    print(f"🎲 Will randomly select {args.limit} articles for processing")
+    print(f"⚙️  Preview mode: {'ON' if args.preview else 'OFF'}")
+    print(f"⚙️  Verbose logging: {'ON' if args.verbose else 'OFF'}")
+    print("-" * 50)
+    
+    # Use only 1 worker for minimal memory usage
+    agent = B2BVaultAgent(max_workers=1)
+    
+    # Collect random articles
+    all_articles = agent.scrape_all_articles_from_homepage(preview=args.preview, max_articles=args.limit)
+    if not all_articles:
+        print("❌ No articles found. Exiting.")
+        exit(1)
+    
+    print(f"✅ {len(all_articles)} articles selected for processing.")
+    
+    # Process in small batches to keep memory low
+    batch_size = 4
+    processed_articles = []
+    total_batches = (len(all_articles) + batch_size - 1) // batch_size
+    for i in range(0, len(all_articles), batch_size):
+        batch = all_articles[i:i+batch_size]
+        print(f"\n📦 Processing batch {i//batch_size+1}/{total_batches} ({len(batch)} articles)...")
+        batch_processed = agent.process_multiple_articles(batch, preview=args.preview)
+        processed_articles.extend(batch_processed)
+        print(f"   ✅ Batch complete: {len(batch_processed)} articles processed")
+        time.sleep(2)  # Short pause to reduce memory pressure
+    
+    print(f"\n🎉 All batches complete! {len(processed_articles)} articles processed.")
+    
+    # Generate outputs
+    pdf_path = agent.generate_comprehensive_pdf_report(processed_articles, preview=args.preview)
+    website_path = agent.generate_website(processed_articles, pdf_path, preview=args.preview)
+    print(f"📄 PDF saved to: {pdf_path}")
+    print(f"🌐 Website: {website_path}")
     agent = B2BVaultAgent()
     scheduler = BlockingScheduler()
     
